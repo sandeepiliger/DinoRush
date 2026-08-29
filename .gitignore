@@ -117,3 +117,12 @@ InitTestScene*.unity*
 # Standalone dotnet build output for the Core projects (kept outside Assets/ on purpose —
 # see docs/DECISIONS.md D9 — but still shouldn't be committed).
 /artifacts/
+
+# NuGet restore writes its own transient files (project.assets.json, *.nuget.g.props/targets,
+# dgspec.json, nuget.cache) to MSBuildProjectExtensionsPath, which defaults to a project-local
+# obj/ regardless of the BaseIntermediateOutputPath redirection above (this is a documented
+# MSBuild/NuGet quirk, not a config mistake) — and the base .gitignore's /[Oo]bj/ rule only
+# anchors at the repo root, so it never catches these. Ignore them explicitly instead of
+# fighting MSBuild property-evaluation order further.
+/src/obj/
+/tests/**/obj/

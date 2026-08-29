@@ -1,0 +1,23 @@
+name: Core tests
+
+# Runs the Unity-free Core logic test suite (docs/DECISIONS.md D9) on every push and PR.
+# This is deliberately independent of Unity: no editor, no Android SDK, no license needed.
+# It's the mechanism that keeps a stray UnityEngine reference in Core from ever reaching main.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: dotnet test
+        run: dotnet test tests/DinoRush.Core.Tests --configuration Release

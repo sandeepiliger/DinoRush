@@ -1,0 +1,9 @@
+<Project>
+  <!-- Must live here, not inside DinoRush.Core.csproj's own PropertyGroup: MSBuild's SDK
+       props import BaseIntermediateOutputPath before a project body is evaluated, so setting
+       it later triggers MSB3539. Directory.Build.props is imported early enough to avoid that. -->
+  <PropertyGroup>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)../artifacts/bin/DinoRush.Core/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)../artifacts/obj/DinoRush.Core/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

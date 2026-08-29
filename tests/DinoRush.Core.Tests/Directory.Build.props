@@ -1,0 +1,7 @@
+<Project>
+  <!-- See src/Directory.Build.props for why this lives here rather than in the .csproj body. -->
+  <PropertyGroup>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)../../artifacts/bin/DinoRush.Core.Tests/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)../../artifacts/obj/DinoRush.Core.Tests/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>
