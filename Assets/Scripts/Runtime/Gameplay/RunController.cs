@@ -292,6 +292,11 @@ namespace DinoRush.Runtime
             _save.Data.BestScore = _bestScore;
             _save.Data.Coins += _session.CoinsCollected;
 
+            // Distance-gated unlocks measure distance, not score — score folds in coins, which
+            // luck can inflate.
+            int distance = (int)_session.DistanceMeters;
+            if (distance > _save.Data.BestDistanceMeters) _save.Data.BestDistanceMeters = distance;
+
             _completedThisRun = _missions.ApplyRun(_session.ToSummary());
             _missions.WriteTo(_save.Data);
 

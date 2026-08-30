@@ -30,6 +30,7 @@ namespace DinoRush.Core
             Append(body, "unlocked", string.Join(",", data.UnlockedDinosaurIds ?? new List<string>()));
             Append(body, "coins", data.Coins.ToString(CultureInfo.InvariantCulture));
             Append(body, "bestScore", data.BestScore.ToString(CultureInfo.InvariantCulture));
+            Append(body, "bestDistance", data.BestDistanceMeters.ToString(CultureInfo.InvariantCulture));
             Append(body, "tutorialCompleted", data.TutorialCompleted ? "1" : "0");
             Append(body, "removeAds", data.RemoveAdsPurchased ? "1" : "0");
             Append(body, "missionDay",
@@ -86,6 +87,7 @@ namespace DinoRush.Core
                 UnlockedDinosaurIds = ReadList(fields, "unlocked"),
                 Coins = ReadInt(fields, "coins", 0),
                 BestScore = ReadInt(fields, "bestScore", 0),
+                BestDistanceMeters = ReadInt(fields, "bestDistance", 0),
                 TutorialCompleted = ReadInt(fields, "tutorialCompleted", 0) == 1,
                 RemoveAdsPurchased = ReadInt(fields, "removeAds", 0) == 1,
                 DailyMissionDayIndex = ReadNullableInt(fields, "missionDay"),
