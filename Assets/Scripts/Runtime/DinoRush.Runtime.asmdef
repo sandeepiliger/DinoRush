@@ -2,7 +2,8 @@
     "name": "DinoRush.Runtime",
     "rootNamespace": "DinoRush.Runtime",
     "references": [
-        "DinoRush.Core"
+        "DinoRush.Core",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
