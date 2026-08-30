@@ -7,10 +7,23 @@ Unity-free `Core` logic and its tests), and your own Windows machine running the
 ## Right now: what exists and what doesn't
 
 M0–M2 built and proved the testable game logic entirely outside the editor — deliberately, see
-`docs/DECISIONS.md` D9 and D12. M3 is in progress: `ProjectSettings/` has been copied in from a
-Unity 6000.3.23f1 URP template, and `Assets/Scripts/Runtime/` now holds the first code that
-crosses into the engine. Still outstanding before the project opens cleanly: `Packages/` and the
-template's `Assets/` contents (step 3 below).
+`docs/DECISIONS.md` D9 and D12. **M3 is complete**: the project opens in Unity 6000.3.23f1 with a
+clean console, and Core was confirmed to produce byte-identical output under Unity's runtime and
+under `dotnet test` (same seed, same segment/obstacle/coin counts) — which is what makes the
+seeded-determinism guarantees in sections 15 and 21 real rather than assumed.
+
+**M4 is in the repo**: a playable run — tap to jump, swipe down to duck, collide, die, restart.
+See "Playing the M4 run" below.
+
+Two notes on layout that are easy to trip over:
+
+- The .NET solution is `DinoRush.Core.sln`, **not** `DinoRush.sln`. Unity generates
+  `<project-folder>.sln` whenever it regenerates project files, so a solution named
+  `DinoRush.sln` would be silently overwritten with Unity's own and stop building the Core
+  projects. CI invokes the test project directly and never depends on either file.
+- `Assets/Scripts/Core/` is engine-free and compiled twice (by Unity and by the standalone
+  `src/DinoRush.Core.csproj`); `Assets/Scripts/Runtime/` is Unity-only. Adding a `using
+  UnityEngine;` to anything under `Core/` breaks the build immediately and by design.
 
 ## Building and testing the Core logic (any machine with the .NET SDK)
 
@@ -71,6 +84,36 @@ is a large, editor-version-specific file that shouldn't be hand-written blind.
    `.meta` files, and `Packages/packages-lock.json`. Do this in one commit before making any
    other changes — skipping this step is what causes GUID drift later ("The referenced script
    on this Behaviour is missing!").
+
+## Playing the M4 run
+
+Open the project and press **Play** — no scene setup needed. `RunBootstrap` builds the camera,
+ground, player and obstacle pool in code on load (D12), so it works from `SampleScene` or from
+an empty scene, reusing whatever camera and light the scene already has.
+
+| Action | Touch | Editor |
+|---|---|---|
+| Jump | tap | Space / W / ↑, or left-click |
+| Duck | swipe down | S / ↓, or drag down |
+| Restart after dying | tap | any key |
+
+Everything on screen is a primitive placeholder, per section 72 — the point of M4 is proving the
+run feels right before any art exists. Gold capsule is the player; rust-coloured blocks are
+ground obstacles to jump; purple blocks hang overhead and must be ducked under.
+
+A note on tap timing: jump fires on finger *release*, not touch-down. It has to — a swipe-down
+starts with a touch-down too, so firing a jump there would make every duck attempt jump first.
+Ducking is not delayed: it fires the instant the swipe threshold is crossed.
+
+### What is and isn't verifiable outside the editor
+
+The run's *rules* are all unit-tested in `Core` and run in CI: the jump arc, duck timing,
+collision, scoring, speed escalation, and a safety suite proving the tuning is compatible with
+the generator's spacing floor (a jump covers 6.4m at top speed against a 7.4m minimum gap, and
+clears ground obstacles with 56% headroom). What CI cannot judge is whether it *feels* good —
+input latency, camera framing, and jump weight are yours to assess by playing it. Retuning is
+just editing `PlayerMotorConfig.CreateDefault()`; the safety tests will fail loudly if a change
+makes obstacles unclearable.
 
 After that, Player Settings worth checking against §44 before any build:
 - Application ID: `com.iligergames.dinorush`
