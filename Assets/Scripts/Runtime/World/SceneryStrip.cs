@@ -54,7 +54,9 @@ namespace DinoRush.Runtime
             var instance = _idle.Count > 0 ? _idle.Pop() : CreateInstance();
 
             // Alternating sides, with a seeded jitter so the strip doesn't read as a metronome.
-            float side = _active.Count % 2 == 0 ? 5.5f : -5.5f;
+            // Pushed wider than the camera's own z offset (RunController.CameraSide), otherwise
+            // markers on the near side spawn on top of the camera and clip through the view.
+            float side = _active.Count % 2 == 0 ? 9.5f : -9.5f;
             float jitter = (float)(_random.NextDouble() * 1.6 - 0.8);
             float height = 1.2f + (float)(_random.NextDouble() * 1.8);
 

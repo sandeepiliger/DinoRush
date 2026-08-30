@@ -15,6 +15,15 @@ namespace DinoRush.Runtime
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Build()
         {
+            // The design is a 390x844 portrait layout and the camera rig is framed for it, so
+            // the orientation is pinned rather than left to auto-rotate. Doing it here means it
+            // also applies in the editor and Simulator, not just to a device build.
+            Screen.autorotateToPortrait = true;
+            Screen.autorotateToPortraitUpsideDown = false;
+            Screen.autorotateToLandscapeLeft = false;
+            Screen.autorotateToLandscapeRight = false;
+            Screen.orientation = ScreenOrientation.Portrait;
+
             var root = new GameObject("DinoRush");
 
             var camera = Camera.main;
@@ -23,11 +32,10 @@ namespace DinoRush.Runtime
                 var cameraObject = new GameObject("Main Camera") { tag = "MainCamera" };
                 camera = cameraObject.AddComponent<Camera>();
             }
-            // Side-on framing (section 38): the dinosaur stays readable and upcoming obstacles
-            // are visible far enough ahead to react to.
-            camera.transform.rotation = Quaternion.Euler(6f, -22f, 0f);
+            // Orientation is set every frame by RunController (it looks down the track), so
+            // only the lens is configured here.
             camera.backgroundColor = new Color(0.36f, 0.45f, 0.30f);
-            camera.fieldOfView = 55f;
+            camera.fieldOfView = 62f;
 
             if (Object.FindAnyObjectByType<Light>() == null)
             {
@@ -43,7 +51,7 @@ namespace DinoRush.Runtime
             ground.transform.SetParent(root.transform);
             // Long enough that the moving camera never reaches an edge; scaled rather than
             // tiled because it's a placeholder, not the real biome floor.
-            ground.transform.localScale = new Vector3(4000f, 1f, 12f);
+            ground.transform.localScale = new Vector3(4000f, 1f, 26f);
             Object.Destroy(ground.GetComponent<Collider>());
             ground.GetComponent<Renderer>().material.color = new Color(0.30f, 0.38f, 0.22f);
 

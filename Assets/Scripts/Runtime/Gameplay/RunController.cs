@@ -23,6 +23,15 @@ namespace DinoRush.Runtime
         // doesn't hand them an instant second death.
         private const float ReviveClearanceMeters = 25f;
 
+        // Camera rig. Trail is how far behind the player the camera sits, Side how far off the
+        // running line, LookAhead how far down the track it aims. Side is deliberately small
+        // relative to Trail: enough to keep the dinosaur's silhouette readable in profile,
+        // without swinging so wide that the track stops receding up the screen.
+        private const float CameraTrail = 9f;
+        private const float CameraHeight = 4.6f;
+        private const float CameraSide = 5.5f;
+        private const float CameraLookAhead = 22f;
+
         private readonly RunInputReader _input = new RunInputReader();
         private readonly List<(ObstacleSpawn spawn, GameObject view)> _activeObstacles =
             new List<(ObstacleSpawn, GameObject)>();
@@ -434,11 +443,30 @@ namespace DinoRush.Runtime
             _player.position = new Vector3(x, _motor.FeetHeightMeters + _motor.CurrentHeightMeters * 0.5f, 0f);
             _player.localScale = new Vector3(0.8f, _motor.CurrentHeightMeters * 0.5f, 0.8f);
 
-            var target = new Vector3(x + 6f, 3.2f, -12f);
+            // Three-quarter view from behind and slightly to the side, looking down the track.
+            //
+            // The previous side-on framing could not work in portrait, and the arithmetic says
+            // why: Camera.fieldOfView is VERTICAL, and portrait aspect is ~0.46, so horizontal
+            // coverage is less than half of vertical. At fov 55 and 12m back that is 5.8m of
+            // visible track — against a 7.4m minimum obstacle gap, which means the next obstacle
+            // was guaranteed to be off-screen until it was nearly on top of the player. Keeping
+            // a side view would need the camera ~50m away, reducing the dinosaur to a speck.
+            //
+            // Running into the screen puts lookahead on the long screen axis and lets depth
+            // compress distance, so 40m+ of track fits at a normal camera distance. Section 38
+            // calls this a "side-running camera", but its actual requirements are that the
+            // dinosaur stays readable AND upcoming obstacles are visible — the second of which
+            // side-on cannot satisfy here. A three-quarter rear view meets both, and shows a 3D
+            // model far better than a flat profile does.
+            var target = new Vector3(x - CameraTrail, CameraHeight, -CameraSide);
             _cameraTransform.position = _cameraSnapped
                 ? Vector3.Lerp(_cameraTransform.position, target, 1f - Mathf.Exp(-12f * deltaTime))
                 : target;
             _cameraSnapped = true;
+
+            // Aim ahead of the player, not at them, so most of the screen is the track to come.
+            var lookAt = new Vector3(x + CameraLookAhead, 1.2f, 0f);
+            _cameraTransform.rotation = Quaternion.LookRotation(lookAt - _cameraTransform.position);
 
             // Section 38: shake must stay subtle. Driven by extinction intensity so it builds
             // with the collapse instead of switching on, peaking at a few centimetres.
