@@ -6,9 +6,11 @@ Unity-free `Core` logic and its tests), and your own Windows machine running the
 
 ## Right now: what exists and what doesn't
 
-As of M0–M2, this repo contains **no `ProjectSettings/` directory** — it is not yet a project
-Unity can open. That's deliberate (see `docs/DECISIONS.md` D9, D12): the testable game logic is
-built and proven first, entirely outside the editor. Unity enters the picture at M3.
+M0–M2 built and proved the testable game logic entirely outside the editor — deliberately, see
+`docs/DECISIONS.md` D9 and D12. M3 is in progress: `ProjectSettings/` has been copied in from a
+Unity 6000.3.23f1 URP template, and `Assets/Scripts/Runtime/` now holds the first code that
+crosses into the engine. Still outstanding before the project opens cleanly: `Packages/` and the
+template's `Assets/` contents (step 3 below).
 
 ## Building and testing the Core logic (any machine with the .NET SDK)
 
@@ -32,17 +34,43 @@ is a large, editor-version-specific file that shouldn't be hand-written blind.
    install.
 2. Create a **throwaway** project — Hub → New Project → the "Universal 3D" (URP) template,
    any name, anywhere outside this repo.
-3. From that throwaway project, copy its `ProjectSettings/` folder into the root of this repo
-   (replacing nothing, since this repo doesn't have one yet).
+3. From that throwaway project, copy **three things** into this repo:
+
+   | Copy from throwaway | To repo | Why |
+   |---|---|---|
+   | `ProjectSettings/` (whole folder) | repo root | Editor version pin, Player Settings, quality/graphics config |
+   | `Packages/` (whole folder) | repo root | `manifest.json` declares URP, Input System and the Test Framework at versions matching this exact editor |
+   | everything inside `Assets/` | this repo's `Assets/` | The URP pipeline assets, sample scene and input actions that `ProjectSettings/` points at |
+
+   **Copy the `.meta` files alongside every asset** — they carry the GUIDs. Copying whole
+   folders (rather than hand-picked files) picks them up automatically.
+
+   The third row is the one that's easy to miss, and the one that breaks things.
+   `ProjectSettings/` does not *contain* the render pipeline — it only *references* it by GUID:
+   `GraphicsSettings.asset` and `QualitySettings.asset` point at URP assets living in the
+   template's `Assets/Settings/`, and `EditorBuildSettings.asset` points at
+   `Assets/Scenes/SampleScene.unity` plus the Input System actions asset. Copy
+   `ProjectSettings/` alone and every one of those references dangles — the project opens with
+   **no working render pipeline**.
+
+   No collision risk: this repo's `Assets/` contains only `Scripts/`, which the template
+   doesn't have, so the two merge cleanly.
+
 4. Delete the throwaway project — it's served its purpose.
 5. Open **this repo** as a Unity project (Hub → Add → select the `dinorush` folder). Unity will
-   generate `.meta` files for everything under `Assets/` and resolve `Packages/manifest.json`
-   into `Packages/packages-lock.json`.
-6. Confirm the console is clean (no red errors) — that's the acceptance bar for M3.
-7. Commit: the copied `ProjectSettings/`, the newly generated `.meta` files, and
-   `Packages/packages-lock.json`. Do this in one commit before making any other changes —
-   skipping this step is what causes GUID drift later ("The referenced script on this Behaviour
-   is missing!").
+   generate `.meta` files for everything under `Assets/Scripts/` and resolve
+   `Packages/manifest.json` into `Packages/packages-lock.json`.
+6. **Acceptance bar for M3** — both must hold:
+   - The console shows no red errors once import finishes.
+   - Press **Play**. The console logs a line beginning `[DinoRush] Core is wired up correctly`,
+     reporting a generated run's segment/obstacle/coin counts. That comes from
+     `Assets/Scripts/Runtime/Bootstrap/CoreIntegrationCheck.cs`, and proves the engine-free
+     `Core` assembly is correctly referenced *and* that its procedural generator produces valid
+     output under Unity's own runtime — not merely under the runtime `dotnet test` uses.
+7. Commit: the copied `ProjectSettings/`, `Packages/` and `Assets/` files, the newly generated
+   `.meta` files, and `Packages/packages-lock.json`. Do this in one commit before making any
+   other changes — skipping this step is what causes GUID drift later ("The referenced script
+   on this Behaviour is missing!").
 
 After that, Player Settings worth checking against §44 before any build:
 - Application ID: `com.iligergames.dinorush`
