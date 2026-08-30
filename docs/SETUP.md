@@ -12,9 +12,14 @@ clean console, and Core was confirmed to produce byte-identical output under Uni
 under `dotnet test` (same seed, same segment/obstacle/coin counts) — which is what makes the
 seeded-determinism guarantees in sections 15 and 21 real rather than assumed.
 
-**M4 and M5 are in the repo**: a playable run — tap to jump, swipe down to duck, collide, die,
-restart — plus collectible coins, pooled scenery, placeholder audio and a smoothed camera.
-See "Playing the run" below.
+**M4 through M10 are in the repo.** A playable run (jump, duck, collide, die, restart) with
+collectible coins, a jungle-to-volcanic biome escalation ending in extinction mode, durable
+save with corruption recovery, daily missions, a deterministic daily challenge, a dinosaur
+collection with unlock rules, and ad/IAP/analytics/remote-config abstractions behind mock
+providers — including a working rewarded-revive and double-coins flow. See "Playing the run".
+
+Still outstanding: the real UI (M7 — the design canvas's screens as uGUI), production art, and
+the placeholder replacements listed at the bottom of this file.
 
 Two notes on layout that are easy to trip over:
 
@@ -102,10 +107,16 @@ check, so an arc coin genuinely requires leaving the ground.
 | Jump | tap | Space / W / ↑, or left-click |
 | Duck | swipe down | S / ↓, or drag down |
 | Restart after dying | tap | any key |
+| Revive / double coins | on-screen buttons | click the buttons |
 
-Everything on screen is a primitive placeholder, per section 72 — the point of M4 is proving the
-run feels right before any art exists. Gold capsule is the player; rust-coloured blocks are
-ground obstacles to jump; purple blocks hang overhead and must be ducked under.
+Everything on screen is a primitive placeholder, per section 72 — the point is proving the run
+feels right before any art exists. Gold capsule is the player; rust-coloured blocks are ground
+obstacles to jump; purple blocks hang overhead and must be ducked under.
+
+Survive past 90 seconds and the world turns volcanic; past 120 and extinction mode starts, with
+the camera shake building as it takes hold. Die and you get a 4-second revive offer before the
+results screen — the ad provider is a mock, so it always "succeeds", which is the point: it
+exercises the real flow without needing an ad network.
 
 A note on tap timing: jump fires on finger *release*, not touch-down. It has to — a swipe-down
 starts with a touch-down too, so firing a jump there would make every duck attempt jump first.
