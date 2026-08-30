@@ -163,3 +163,22 @@ everywhere else — so don't skip it once you're collaborating with anyone else 
 Not wired up yet (that lands around M9–M10 per `docs/FOUNDATION_PLAN.md`). When it is, it will
 use `game-ci/unity-builder@v5` reading `unityVersion: auto` from `ProjectSettings/ProjectVersion.txt`
 — which is exactly why getting that file right at M3 matters beyond just your local machine.
+
+## Placeholder implementations that MUST be replaced before release
+
+Section 70 says that when a service isn't available, build the abstraction and a temporary
+stand-in rather than inventing something that breaks later. Several of those stand-ins now
+exist, and each is a release blocker. They live in `Core` (so they compile into a build), which
+is convenient during development and dangerous at ship time.
+
+| Placeholder | Replace with | Why it blocks release |
+|---|---|---|
+| `MockIapProvider` | Unity IAP 5.4.2+ (Google Play Billing 9) | Section 56 forbids fake purchase paths. Shipping this would grant paid content for free. |
+| `MockAdProvider` | Google Mobile Ads Unity plugin, **test unit IDs during development** | No revenue, and section 23 forbids production ad IDs before release. |
+| `MockAnalyticsProvider` | The chosen analytics SDK (vendor still undecided) | Events go to memory and vanish; every metric in section 77 would read zero. |
+| `RunAudio` synthesised blips | Real audio assets with a licence recorded in `LICENSES/THIRD_PARTY_ASSETS.md` | Placeholder sound, and section 57 requires licence provenance for anything shipped. |
+| `RunHud` (IMGUI) | uGUI screens built to the design canvas | IMGUI allocates every frame, which section 35 forbids. |
+| Capsule/cube primitives | Rigged dinosaur and biome art | Section 83's release checklist requires no placeholder assets. |
+
+The consent flow (UMP) noted in `docs/DECISIONS.md` D8 is also still outstanding and gates
+serving ads to EU users.

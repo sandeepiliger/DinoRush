@@ -5,14 +5,23 @@ using UnityEngine;
 namespace DinoRush.Runtime
 {
     // The playable loop. Deliberately thin: every rule that decides the outcome of a run —
-    // speed escalation, jump arc, collision, coin collection, scoring, revive limits — lives in
-    // the engine-free Core assembly and is unit-tested there (docs/DECISIONS.md D9). This class
-    // owns only what genuinely needs Unity: reading input, moving transforms, recycling views.
+    // speed escalation, jump arc, collision, coin collection, scoring, revive limits, ad policy
+    // — lives in the engine-free Core assembly and is unit-tested there (docs/DECISIONS.md D9).
+    // This class owns only what genuinely needs Unity: input, transforms, and view recycling.
     public sealed class RunController : MonoBehaviour
     {
         private const float SpawnAheadMeters = 60f;
         private const float RecycleBehindMeters = 15f;
         private const float RunLengthMeters = 5000f;
+
+        // The revive offer's countdown, matching the design's "4 SECONDS" dial. Short enough to
+        // keep restarts fast (section 4), long enough to read the offer.
+        private const float ReviveOfferSeconds = 4f;
+
+        // After a revive the player resumes exactly where they died — which is on top of the
+        // obstacle that killed them. Everything within this window is cleared so the revive
+        // doesn't hand them an instant second death.
+        private const float ReviveClearanceMeters = 25f;
 
         private readonly RunInputReader _input = new RunInputReader();
         private readonly List<(ObstacleSpawn spawn, GameObject view)> _activeObstacles =
@@ -20,6 +29,7 @@ namespace DinoRush.Runtime
         private readonly List<(CoinSpawn spawn, GameObject view)> _activeCoins =
             new List<(CoinSpawn, GameObject)>();
 
+        private GameServices _services;
         private RunGenerationConfig _runConfig;
         private PlayerMotorConfig _motorConfig;
         private GameStateMachine _states;
@@ -31,9 +41,6 @@ namespace DinoRush.Runtime
         private SceneryStrip _scenery;
         private RunAudio _audio;
         private BiomeSchedule _biomes;
-        private SaveService _save;
-        private MissionTracker _missions;
-        private IReadOnlyList<MissionDefinition> _completedThisRun = new List<MissionDefinition>();
         private Renderer _groundRenderer;
         private Camera _camera;
 
@@ -44,21 +51,40 @@ namespace DinoRush.Runtime
         private int _nextCoinIndex;
         private int _bestScore;
         private bool _cameraSnapped;
+        private BiomeType _lastReportedBiome;
+
+        private float _reviveOfferRemaining;
+        private bool _reviveOffered;
+        private bool _doubleCoinsOffered;
+        private bool _coinsBanked;
+        private IReadOnlyList<MissionDefinition> _completedThisRun = new List<MissionDefinition>();
 
         public RunSession Session => _session;
         public GameState State => _states.Current;
         public int BestScore => _bestScore;
+        public int BankedCoins => _services != null ? _services.Save.Data.Coins : 0;
+        public IReadOnlyList<MissionDefinition> CompletedThisRun => _completedThisRun;
+
+        // Whether the revive offer is currently on screen, and how long is left on its dial.
+        public bool IsReviveOfferActive => _reviveOfferRemaining > 0f;
+        public float ReviveOfferRemaining => _reviveOfferRemaining;
+        public bool CanOfferDoubleCoins =>
+            !_doubleCoinsOffered && _session != null && _session.CoinsCollected > 0 &&
+            _services.Ads.IsRewardedAvailable(RewardedPlacement.DoubleCoins);
+
+        public WorldState CurrentWorld =>
+            _biomes != null && _session != null ? _biomes.GetWorldState(_session.ElapsedSeconds) : default;
 
         public void Initialise(
             Transform player, Transform cameraTransform, Transform ground,
-            Transform obstacleRoot, Transform coinRoot, Transform sceneryRoot, RunAudio audio,
-            SaveService save)
+            Transform obstacleRoot, Transform coinRoot, Transform sceneryRoot,
+            RunAudio audio, GameServices services)
         {
-            _save = save;
             _player = player;
             _cameraTransform = cameraTransform;
             _ground = ground;
             _audio = audio;
+            _services = services;
 
             _runConfig = RunGenerationConfig.CreateDefault();
             _motorConfig = _runConfig.Player;
@@ -72,12 +98,7 @@ namespace DinoRush.Runtime
             _coinPool = new CoinPool(coinRoot, _runConfig.CoinRadiusMeters, prewarmCount: 48);
             _scenery = new SceneryStrip(sceneryRoot, prewarmCount: 28);
 
-            // Best score and coin balance carry across sessions from here on.
-            _bestScore = _save.Data.BestScore;
-
-            // Roll the daily set over if the date changed while the game was closed.
-            _missions = new MissionTracker();
-            DailyMissionRotation.EnsureCurrent(_save.Data, GameClock.TodayIndexUtc, _missions);
+            _bestScore = _services.Save.Data.BestScore;
 
             _states.TransitionTo(GameState.Menu);
             StartRun();
@@ -85,15 +106,10 @@ namespace DinoRush.Runtime
 
         private void StartRun()
         {
-            // A fresh seed per run keeps runs varied; the daily challenge (section 21) will pass
-            // a fixed date-derived seed through this same path.
             int seed = Random.Range(int.MinValue, int.MaxValue);
 
             _run = new SegmentGenerator(_runConfig).GenerateRun(seed, RunLengthMeters);
 
-            // The generator is proven safe across thousands of seeds in CI, but a run that
-            // somehow violated the rules would be unfair in a way the player blames on the game.
-            // Validating here costs microseconds and turns that into a visible error.
             var validation = new RunValidator(_runConfig).Validate(_run);
             if (!validation.IsValid)
                 Debug.LogError($"[DinoRush] Generated an invalid run (seed {seed}): {validation.Violations[0]}");
@@ -104,6 +120,12 @@ namespace DinoRush.Runtime
             _nextObstacleIndex = 0;
             _nextCoinIndex = 0;
             _cameraSnapped = false;
+            _reviveOfferRemaining = 0f;
+            _reviveOffered = false;
+            _doubleCoinsOffered = false;
+            _coinsBanked = false;
+            _completedThisRun = new List<MissionDefinition>();
+            _lastReportedBiome = BiomeType.Jungle;
 
             foreach (var (_, view) in _activeObstacles) _obstaclePool.Return(view);
             _activeObstacles.Clear();
@@ -113,12 +135,24 @@ namespace DinoRush.Runtime
 
             if (_states.Current != GameState.Ready) _states.TransitionTo(GameState.Ready);
             _states.TransitionTo(GameState.Playing);
+
+            _services.Analytics.Track(AnalyticsEvent.RunStarted, "seed", seed);
         }
 
         private void Update()
         {
-            if (_states.Current == GameState.Playing) TickRun(Time.deltaTime);
-            else if (_states.Current == GameState.GameOver) TickGameOver();
+            float delta = Time.deltaTime;
+            _services.Ads.Tick(delta);
+
+            switch (_states.Current)
+            {
+                case GameState.Playing:
+                    TickRun(delta);
+                    break;
+                case GameState.GameOver:
+                    TickGameOver(delta);
+                    break;
+            }
         }
 
         private void TickRun(float deltaTime)
@@ -134,6 +168,12 @@ namespace DinoRush.Runtime
             var world = _biomes.GetWorldState(_session.ElapsedSeconds);
             ApplyWorld(world);
 
+            if (world.Biome != null && world.Biome.Type != _lastReportedBiome)
+            {
+                _lastReportedBiome = world.Biome.Type;
+                _services.Analytics.Track(AnalyticsEvent.BiomeEntered, "biome", world.Biome.Type.ToString());
+            }
+
             SyncObstacles(world.Palette);
             SyncCoins();
             _scenery.Sync(_session.DistanceMeters, world.Palette);
@@ -142,18 +182,112 @@ namespace DinoRush.Runtime
             if (HasHitSomething())
             {
                 _audio.PlayHit();
+                _services.Analytics.Track(AnalyticsEvent.ObstacleHit, "distance", (int)_session.DistanceMeters);
                 EndRun();
             }
         }
 
-        private void TickGameOver()
+        private void TickGameOver(float deltaTime)
         {
-            // Section 4: restart must be near-instant, with no loading step between runs.
+            if (_reviveOfferRemaining > 0f)
+            {
+                _reviveOfferRemaining -= deltaTime;
+
+                // Letting the dial run out is a decline, not a failure — the player simply
+                // didn't want it, and the results screen follows either way.
+                if (_reviveOfferRemaining <= 0f)
+                {
+                    _reviveOfferRemaining = 0f;
+                    FinaliseRun();
+                }
+                return; // the offer owns input while it's up
+            }
+
             if (RunInputReader.AnyConfirmPressed())
             {
+                // Section 24 permits an interstitial only here, between runs, and the policy
+                // decides whether one is actually due.
+                _services.Ads.TryShowInterstitial(GameState.GameOver);
+
                 _states.TransitionTo(GameState.Ready);
                 StartRun();
             }
+        }
+
+        // Called by the HUD's "Watch & Revive" button.
+        public void AcceptReviveOffer()
+        {
+            if (!IsReviveOfferActive) return;
+
+            _reviveOfferRemaining = 0f;
+            _states.TransitionTo(GameState.Revive);
+
+            _services.Ads.ShowRewarded(RewardedPlacement.Revive, outcome =>
+            {
+                if (outcome == RewardedOutcome.Earned && _session.TryRevive())
+                {
+                    ClearObstaclesAroundPlayer();
+                    _motor.Reset();
+                    _input.Reset();
+                    _states.TransitionTo(GameState.Playing);
+                }
+                else
+                {
+                    // Unavailable, failed or dismissed all land here. The player loses nothing
+                    // they had — section 55's "your run continues, nothing lost".
+                    _states.TransitionTo(GameState.GameOver);
+                    FinaliseRun();
+                }
+            });
+        }
+
+        public void DeclineReviveOffer()
+        {
+            if (!IsReviveOfferActive) return;
+            _reviveOfferRemaining = 0f;
+            FinaliseRun();
+        }
+
+        // Called by the HUD's "Double Coins" button on the results screen.
+        public void AcceptDoubleCoins()
+        {
+            if (!CanOfferDoubleCoins) return;
+            _doubleCoinsOffered = true;
+
+            _services.Ads.ShowRewarded(RewardedPlacement.DoubleCoins, outcome =>
+            {
+                if (outcome != RewardedOutcome.Earned) return;
+
+                // The run's coins have already been banked once, so doubling adds one more
+                // helping rather than recomputing — no chance of paying out twice on a retry.
+                _services.Save.Data.Coins += _session.CoinsCollected;
+                _services.Save.Save();
+            });
+        }
+
+        // A revived player resumes on top of whatever killed them. Clearing the immediate
+        // neighbourhood is what makes the revive worth the ad — without it, the reward is a
+        // second death a frame later.
+        private void ClearObstaclesAroundPlayer()
+        {
+            float from = _session.DistanceMeters - ReviveClearanceMeters;
+            float to = _session.DistanceMeters + ReviveClearanceMeters;
+
+            for (int i = _activeObstacles.Count - 1; i >= 0; i--)
+            {
+                var (spawn, view) = _activeObstacles[i];
+                if (spawn.DistanceMeters >= from && spawn.DistanceMeters <= to)
+                {
+                    _obstaclePool.Return(view);
+                    _activeObstacles.RemoveAt(i);
+                }
+            }
+
+            // Skip past anything not yet spawned inside the window, so it doesn't appear on
+            // top of the player a frame later.
+            while (_nextObstacleIndex < _run.Obstacles.Count &&
+                   _run.Obstacles[_nextObstacleIndex].DistanceMeters <= to)
+                _nextObstacleIndex++;
         }
 
         private void SyncObstacles(BiomePalette palette)
@@ -198,8 +332,6 @@ namespace DinoRush.Runtime
             {
                 var (spawn, view) = _activeCoins[i];
 
-                // Collection is decided by Core's overlap test, not by distance passed: a coin
-                // at the top of an arc must actually be jumped for.
                 bool collected = CoinCollector.IsCollected(_runConfig, _motor, distance, spawn);
                 bool missed = spawn.DistanceMeters < distance - RecycleBehindMeters;
 
@@ -216,8 +348,6 @@ namespace DinoRush.Runtime
                 }
                 else
                 {
-                    // Spin only what's on screen; a coin the player will never see doesn't need
-                    // a transform write every frame.
                     view.transform.Rotate(0f, 0f, 180f * Time.deltaTime, Space.Self);
                 }
             }
@@ -235,27 +365,19 @@ namespace DinoRush.Runtime
 
         private void PositionViews(float deltaTime, WorldState world)
         {
-            // The world is authored in absolute metres and the player advances through it,
-            // rather than the world scrolling past a stationary player. That keeps Unity
-            // transform positions numerically identical to Core's distance values, so anything
-            // visible on screen can be checked directly against the tested model.
             float x = _session.DistanceMeters;
 
             _player.position = new Vector3(x, _motor.FeetHeightMeters + _motor.CurrentHeightMeters * 0.5f, 0f);
             _player.localScale = new Vector3(0.8f, _motor.CurrentHeightMeters * 0.5f, 0.8f);
 
-            // Follow horizontally but not vertically: tracking the jump would keep the player
-            // pinned mid-frame and make the jump itself invisible. Section 38 wants the
-            // dinosaur readable and the obstacles ahead visible, which a fixed height gives.
             var target = new Vector3(x + 6f, 3.2f, -12f);
             _cameraTransform.position = _cameraSnapped
                 ? Vector3.Lerp(_cameraTransform.position, target, 1f - Mathf.Exp(-12f * deltaTime))
                 : target;
             _cameraSnapped = true;
 
-            // Section 38: shake must stay subtle. It is driven by extinction intensity so it
-            // builds with the collapse instead of switching on, and peaks at a few centimetres
-            // — enough to feel the world coming apart without making obstacles hard to read.
+            // Section 38: shake must stay subtle. Driven by extinction intensity so it builds
+            // with the collapse instead of switching on, peaking at a few centimetres.
             if (world.ExtinctionIntensity > 0f)
             {
                 float amplitude = 0.12f * world.ExtinctionIntensity;
@@ -270,43 +392,68 @@ namespace DinoRush.Runtime
 
         private void ApplyWorld(WorldState world)
         {
-            // Sky and ground are two writes per frame, so they track the blend continuously;
-            // spawned objects take their colour on rent instead (see ObstaclePool.Rent).
             if (_camera != null) _camera.backgroundColor = world.Palette.Sky.ToColor();
             if (_groundRenderer != null) _groundRenderer.material.color = world.Palette.Ground.ToColor();
         }
 
-        public WorldState CurrentWorld =>
-            _biomes != null && _session != null
-                ? _biomes.GetWorldState(_session.ElapsedSeconds)
-                : default;
-
         private void EndRun()
         {
             _session.Die();
-            if (_session.Score > _bestScore) _bestScore = _session.Score;
+            _states.TransitionTo(GameState.GameOver);
 
-            // Persist at the end of a run rather than during it: a write per frame would be
-            // wasteful, and death is the natural checkpoint. Coins earned are banked here too,
-            // so a run's coins are only kept once it actually ends.
-            _save.Data.BestScore = _bestScore;
-            _save.Data.Coins += _session.CoinsCollected;
+            _services.Analytics.Track(AnalyticsEvent.PlayerDied, "distance", (int)_session.DistanceMeters);
+
+            // Offer the revive before banking anything: the run isn't over until the player
+            // declines, and a revived run keeps accumulating into the same totals.
+            bool canRevive = !_session.HasUsedRevive
+                             && _services.Config.GetBool(ConfigKeys.ReviveEnabled, true)
+                             && _services.Ads.IsRewardedAvailable(RewardedPlacement.Revive);
+
+            if (canRevive && !_reviveOffered)
+            {
+                _reviveOffered = true;
+                _reviveOfferRemaining = ReviveOfferSeconds;
+                return;
+            }
+
+            FinaliseRun();
+        }
+
+        // Banks the run exactly once, however the player got here — declined the offer, let it
+        // expire, watched an ad that failed, or died a second time after reviving.
+        private void FinaliseRun()
+        {
+            if (_coinsBanked) return;
+            _coinsBanked = true;
+
+            var save = _services.Save.Data;
+
+            if (_session.Score > _bestScore) _bestScore = _session.Score;
+            save.BestScore = _bestScore;
+            save.Coins += _session.CoinsCollected;
 
             // Distance-gated unlocks measure distance, not score — score folds in coins, which
             // luck can inflate.
             int distance = (int)_session.DistanceMeters;
-            if (distance > _save.Data.BestDistanceMeters) _save.Data.BestDistanceMeters = distance;
+            if (distance > save.BestDistanceMeters) save.BestDistanceMeters = distance;
 
-            _completedThisRun = _missions.ApplyRun(_session.ToSummary());
-            _missions.WriteTo(_save.Data);
+            _completedThisRun = _services.Missions.ApplyRun(_session.ToSummary());
+            _services.Missions.WriteTo(save);
 
-            _save.Save();
+            foreach (var mission in _completedThisRun)
+                _services.Analytics.Track(AnalyticsEvent.MissionCompleted, "mission", mission.Id);
 
-            _states.TransitionTo(GameState.GameOver);
+            _services.Analytics.Track(AnalyticsEvent.RunCompleted, new Dictionary<string, object>
+            {
+                ["distance"] = distance,
+                ["coins"] = _session.CoinsCollected,
+                ["score"] = _session.Score,
+            });
+
+            _services.Ads.RegisterRunCompleted();
+            _services.Save.Save();
         }
 
-        public int BankedCoins => _save != null ? _save.Data.Coins : 0;
-        public IReadOnlyList<MissionDefinition> CompletedThisRun => _completedThisRun;
-        public MissionTracker Missions => _missions;
+        private void OnApplicationQuit() => _services?.Shutdown();
     }
 }
