@@ -65,12 +65,14 @@ namespace DinoRush.Runtime
             // Save, analytics, config, ads and progression, constructed in section 53's order.
             var services = new GameServices();
 
+            // Built in code like everything else (D12) — canvas, safe area, and every screen.
+            var ui = GameUI.Create(root.transform);
+
             var controller = root.AddComponent<RunController>();
             controller.Initialise(
                 player.transform, camera.transform, ground.transform,
-                obstacleRoot.transform, coinRoot.transform, sceneryRoot.transform, audio, services);
-
-            root.AddComponent<RunHud>().Initialise(controller);
+                obstacleRoot.transform, coinRoot.transform, sceneryRoot.transform,
+                audio, services, ui);
 
             Object.DontDestroyOnLoad(root);
         }

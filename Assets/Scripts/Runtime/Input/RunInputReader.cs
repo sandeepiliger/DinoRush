@@ -1,5 +1,6 @@
 using DinoRush.Core;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 
 namespace DinoRush.Runtime
@@ -29,7 +30,33 @@ namespace DinoRush.Runtime
             var keyboardIntent = ReadKeyboard();
             if (keyboardIntent != PlayerIntent.None) return keyboardIntent;
 
+            // Once real buttons exist, a raw device poll would fire a jump for the same tap that
+            // pressed Pause — this reader knows nothing about uGUI, so the guard has to be here.
+            // Cancels any gesture in progress too, otherwise a drag that ends over a button
+            // would resolve as a tap afterwards.
+            if (IsPointerOverUI())
+            {
+                _tracking = false;
+                _gestureConsumed = false;
+                return PlayerIntent.None;
+            }
+
             return ReadPointer();
+        }
+
+        private static bool IsPointerOverUI()
+        {
+            var events = EventSystem.current;
+            if (events == null) return false;
+
+            var touch = Touchscreen.current?.primaryTouch;
+            if (touch != null && touch.press.isPressed)
+            {
+                // Touch needs its pointer id; the parameterless overload only covers the mouse.
+                return events.IsPointerOverGameObject(touch.touchId.ReadValue());
+            }
+
+            return events.IsPointerOverGameObject();
         }
 
         // Editor/desktop convenience: lets the run be played and debugged without a device.

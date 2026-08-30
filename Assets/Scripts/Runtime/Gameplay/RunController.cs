@@ -40,6 +40,7 @@ namespace DinoRush.Runtime
         private CoinPool _coinPool;
         private SceneryStrip _scenery;
         private RunAudio _audio;
+        private GameUI _ui;
         private BiomeSchedule _biomes;
         private Renderer _groundRenderer;
         private Camera _camera;
@@ -57,6 +58,7 @@ namespace DinoRush.Runtime
         private bool _reviveOffered;
         private bool _doubleCoinsOffered;
         private bool _coinsBanked;
+        private bool _wasNewBest;
         private IReadOnlyList<MissionDefinition> _completedThisRun = new List<MissionDefinition>();
 
         public RunSession Session => _session;
@@ -78,13 +80,15 @@ namespace DinoRush.Runtime
         public void Initialise(
             Transform player, Transform cameraTransform, Transform ground,
             Transform obstacleRoot, Transform coinRoot, Transform sceneryRoot,
-            RunAudio audio, GameServices services)
+            RunAudio audio, GameServices services, GameUI ui)
         {
             _player = player;
             _cameraTransform = cameraTransform;
             _ground = ground;
             _audio = audio;
             _services = services;
+            _ui = ui;
+            SubscribeToUi();
 
             _runConfig = RunGenerationConfig.CreateDefault();
             _motorConfig = _runConfig.Player;
@@ -101,7 +105,64 @@ namespace DinoRush.Runtime
             _bestScore = _services.Save.Data.BestScore;
 
             _states.TransitionTo(GameState.Menu);
-            StartRun();
+            _ui.ShowMenu(_services.Save.Data, _services.Collection);
+        }
+
+        private void SubscribeToUi()
+        {
+            // The UI raises intents and never changes state itself (section 30) — every
+            // transition below happens here, in one place.
+            _ui.PlayPressed += () =>
+            {
+                if (_states.Current != GameState.Menu) return;
+                StartRun();
+            };
+
+            _ui.PausePressed += () =>
+            {
+                if (_states.Current != GameState.Playing) return;
+                _states.TransitionTo(GameState.Paused);
+                _ui.ShowPause(_session, CurrentWorld);
+            };
+
+            _ui.ResumePressed += () =>
+            {
+                if (_states.Current != GameState.Paused) return;
+                _ui.HidePause();
+                _input.Reset(); // drop any gesture started before the pause
+                _states.TransitionTo(GameState.Playing);
+            };
+
+            _ui.RestartPressed += () =>
+            {
+                if (_states.Current == GameState.Paused) _ui.HidePause();
+                else if (_states.Current == GameState.GameOver) _ui.HideResults();
+                else return;
+
+                // Section 24 allows an interstitial only between runs; the policy decides
+                // whether one is actually due.
+                _services.Ads.TryShowInterstitial(GameState.GameOver);
+                StartRun();
+            };
+
+            _ui.QuitToMenuPressed += () =>
+            {
+                if (_states.Current == GameState.Paused)
+                {
+                    // Leaving a run early still banks what was earned.
+                    _ui.HidePause();
+                    FinaliseRun(showResults: false);
+                }
+                else if (_states.Current != GameState.GameOver) return;
+
+                _ui.HideResults();
+                _states.TransitionTo(GameState.Menu);
+                _ui.ShowMenu(_services.Save.Data, _services.Collection);
+            };
+
+            _ui.ReviveAccepted += AcceptReviveOffer;
+            _ui.ReviveDeclined += DeclineReviveOffer;
+            _ui.DoubleCoinsPressed += AcceptDoubleCoins;
         }
 
         private void StartRun()
@@ -136,6 +197,7 @@ namespace DinoRush.Runtime
             if (_states.Current != GameState.Ready) _states.TransitionTo(GameState.Ready);
             _states.TransitionTo(GameState.Playing);
 
+            _ui.ShowRunning();
             _services.Analytics.Track(AnalyticsEvent.RunStarted, "seed", seed);
         }
 
@@ -152,6 +214,9 @@ namespace DinoRush.Runtime
                 case GameState.GameOver:
                     TickGameOver(delta);
                     break;
+
+                // Paused and Menu intentionally tick nothing: the run is frozen, and the UI
+                // drives everything from here via intents.
             }
         }
 
@@ -178,6 +243,7 @@ namespace DinoRush.Runtime
             SyncCoins();
             _scenery.Sync(_session.DistanceMeters, world.Palette);
             PositionViews(deltaTime, world);
+            _ui.RefreshHud(_session, world);
 
             if (HasHitSomething())
             {
@@ -189,28 +255,18 @@ namespace DinoRush.Runtime
 
         private void TickGameOver(float deltaTime)
         {
-            if (_reviveOfferRemaining > 0f)
+            if (_reviveOfferRemaining <= 0f) return;
+
+            _reviveOfferRemaining -= deltaTime;
+            _ui.UpdateReviveCountdown(Mathf.Max(0f, _reviveOfferRemaining), ReviveOfferSeconds);
+
+            // Letting the dial run out is a decline, not a failure — the player simply didn't
+            // want it, and the results screen follows either way.
+            if (_reviveOfferRemaining <= 0f)
             {
-                _reviveOfferRemaining -= deltaTime;
-
-                // Letting the dial run out is a decline, not a failure — the player simply
-                // didn't want it, and the results screen follows either way.
-                if (_reviveOfferRemaining <= 0f)
-                {
-                    _reviveOfferRemaining = 0f;
-                    FinaliseRun();
-                }
-                return; // the offer owns input while it's up
-            }
-
-            if (RunInputReader.AnyConfirmPressed())
-            {
-                // Section 24 permits an interstitial only here, between runs, and the policy
-                // decides whether one is actually due.
-                _services.Ads.TryShowInterstitial(GameState.GameOver);
-
-                _states.TransitionTo(GameState.Ready);
-                StartRun();
+                _reviveOfferRemaining = 0f;
+                _ui.HideReviveOffer();
+                FinaliseRun();
             }
         }
 
@@ -229,12 +285,15 @@ namespace DinoRush.Runtime
                     ClearObstaclesAroundPlayer();
                     _motor.Reset();
                     _input.Reset();
+                    _ui.HideReviveOffer();
+                    _ui.ShowRunning();
                     _states.TransitionTo(GameState.Playing);
                 }
                 else
                 {
                     // Unavailable, failed or dismissed all land here. The player loses nothing
                     // they had — section 55's "your run continues, nothing lost".
+                    _ui.HideReviveOffer();
                     _states.TransitionTo(GameState.GameOver);
                     FinaliseRun();
                 }
@@ -245,6 +304,7 @@ namespace DinoRush.Runtime
         {
             if (!IsReviveOfferActive) return;
             _reviveOfferRemaining = 0f;
+            _ui.HideReviveOffer();
             FinaliseRun();
         }
 
@@ -262,6 +322,10 @@ namespace DinoRush.Runtime
                 // helping rather than recomputing — no chance of paying out twice on a retry.
                 _services.Save.Data.Coins += _session.CoinsCollected;
                 _services.Save.Save();
+
+                // The offer is spent; re-show results so the wallet reflects the reward.
+                _ui.ShowResults(_session, _bestScore, BankedCoins, _wasNewBest, _completedThisRun,
+                    canDoubleCoins: false);
             });
         }
 
@@ -413,6 +477,7 @@ namespace DinoRush.Runtime
             {
                 _reviveOffered = true;
                 _reviveOfferRemaining = ReviveOfferSeconds;
+                _ui.ShowReviveOffer(_session, ReviveOfferSeconds);
                 return;
             }
 
@@ -421,14 +486,19 @@ namespace DinoRush.Runtime
 
         // Banks the run exactly once, however the player got here — declined the offer, let it
         // expire, watched an ad that failed, or died a second time after reviving.
-        private void FinaliseRun()
+        private void FinaliseRun(bool showResults = true)
         {
-            if (_coinsBanked) return;
+            if (_coinsBanked)
+            {
+                if (showResults) ShowResults();
+                return;
+            }
             _coinsBanked = true;
 
             var save = _services.Save.Data;
 
-            if (_session.Score > _bestScore) _bestScore = _session.Score;
+            _wasNewBest = _session.Score > _bestScore;
+            if (_wasNewBest) _bestScore = _session.Score;
             save.BestScore = _bestScore;
             save.Coins += _session.CoinsCollected;
 
@@ -452,7 +522,12 @@ namespace DinoRush.Runtime
 
             _services.Ads.RegisterRunCompleted();
             _services.Save.Save();
+
+            if (showResults) ShowResults();
         }
+
+        private void ShowResults() =>
+            _ui.ShowResults(_session, _bestScore, BankedCoins, _wasNewBest, _completedThisRun, CanOfferDoubleCoins);
 
         private void OnApplicationQuit() => _services?.Shutdown();
     }
