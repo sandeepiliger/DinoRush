@@ -22,13 +22,12 @@ namespace DinoRush.Runtime
             var backdrop = UIFactory.CreatePanel("Backdrop", root, UITheme.Backdrop);
             UIFactory.Stretch(backdrop.rectTransform);
 
-            var panel = UIFactory.CreateStonePanel("Panel", root, rimThickness: 3f);
+            var panel = UIFactory.CreateStonePanel("Panel", root, radius: 20);
             UIFactory.SetAnchoredBox(panel,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 Vector2.zero, new Vector2(330f, 400f));
 
-            var title = UIFactory.CreateLabel("Title", panel, "PAUSED",
-                UITheme.SizeTitle, UITheme.TextPrimary, TextAnchor.MiddleCenter, FontStyle.Bold);
+            var title = UIFactory.CreateHeadline("Title", panel, "PAUSED", UITheme.SizeTitle);
             UIFactory.SetAnchoredBox(title.rectTransform,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(0f, -26f), new Vector2(280f, 38f));
@@ -46,19 +45,19 @@ namespace DinoRush.Runtime
                 new Vector2(0f, -108f), new Vector2(300f, 30f));
 
             UIFactory.CreateChunkyButton("Resume", panel, "RESUME",
-                UITheme.GoldLight, UITheme.DangerDeep, UITheme.TextOnGold, UITheme.SizeHeading, onResume);
+                UITheme.GoldLight, UITheme.GoldDeep, UITheme.DangerDeep, UITheme.TextOnGold, UITheme.SizeHeading, onResume);
             UIFactory.SetAnchoredBox((RectTransform)panel.Find("Resume"),
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                 new Vector2(0f, 150f), new Vector2(280f, 62f));
 
             UIFactory.CreateChunkyButton("Restart", panel, "RESTART RUN",
-                UITheme.PanelTop, UITheme.Stone, UITheme.TextPrimary, UITheme.SizeBody, onRestart);
+                UITheme.PanelTop, UITheme.PanelBottom, UITheme.Stone, UITheme.TextPrimary, UITheme.SizeBody, onRestart);
             UIFactory.SetAnchoredBox((RectTransform)panel.Find("Restart"),
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                 new Vector2(0f, 90f), new Vector2(280f, 50f));
 
             UIFactory.CreateChunkyButton("Quit", panel, "QUIT TO CAMP",
-                UITheme.PanelTop, UITheme.Stone, UITheme.TextSecondary, UITheme.SizeBody, onQuit);
+                UITheme.PanelTop, UITheme.PanelBottom, UITheme.Stone, UITheme.TextSecondary, UITheme.SizeBody, onQuit);
             UIFactory.SetAnchoredBox((RectTransform)panel.Find("Quit"),
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                 new Vector2(0f, 32f), new Vector2(280f, 46f));

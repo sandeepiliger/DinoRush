@@ -24,16 +24,23 @@ namespace DinoRush.Runtime
             UIFactory.Stretch(root);
             var screen = root.gameObject.AddComponent<MainMenuScreen>();
 
-            var backdrop = UIFactory.CreatePanel("Backdrop", root, new Color(0.06f, 0.04f, 0.03f, 0.94f));
+            // A vertical gradient ground rather than flat black — the design's menu fades from
+            // a warm lit horizon into darkness.
+            var backdrop = UIFactory.CreateSpriteImage("Backdrop", root,
+                UISprites.VerticalGradient(new Color(0.28f, 0.20f, 0.13f), new Color(0.07f, 0.05f, 0.04f)));
             UIFactory.Stretch(backdrop.rectTransform);
+
+            var glow = UIFactory.CreateGlow("TitleGlow", root, new Color(1f, 0.55f, 0.2f, 0.30f));
+            UIFactory.SetAnchoredBox(glow.rectTransform,
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(0f, -150f), new Vector2(360f, 300f));
 
             screen._coins = UIFactory.CreatePill("Coins", root, "0", UITheme.Coin, out _);
             UIFactory.SetAnchoredBox((RectTransform)screen._coins.transform.parent,
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f),
                 new Vector2(16f, -16f), new Vector2(118f, 36f));
 
-            var title = UIFactory.CreateLabel("Title", root, "DINO RUSH",
-                UITheme.SizeDisplay, UITheme.GoldLight, TextAnchor.MiddleCenter, FontStyle.Bold);
+            var title = UIFactory.CreateHeadline("Title", root, "DINO RUSH", 64);
             UIFactory.SetAnchoredBox(title.rectTransform,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(0f, -110f), new Vector2(340f, 60f));
@@ -66,7 +73,7 @@ namespace DinoRush.Runtime
                 new Vector2(0f, -58f), new Vector2(290f, 52f));
 
             UIFactory.CreateChunkyButton("Play", root, "PLAY",
-                UITheme.GoldLight, UITheme.DangerDeep, UITheme.TextOnGold, UITheme.SizeDisplay, onPlay);
+                UITheme.GoldLight, UITheme.GoldDeep, UITheme.DangerDeep, UITheme.TextOnGold, UITheme.SizeDisplay, onPlay);
             UIFactory.SetAnchoredBox((RectTransform)root.Find("Play"),
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                 new Vector2(0f, 140f), new Vector2(300f, 84f));
@@ -87,7 +94,7 @@ namespace DinoRush.Runtime
             for (int i = 0; i < labels.Length; i++)
             {
                 var button = UIFactory.CreateChunkyButton($"Menu_{labels[i]}", root, labels[i],
-                    UITheme.PanelTop, UITheme.Stone, UITheme.TextSecondary, UITheme.SizeCaption, null);
+                    UITheme.PanelTop, UITheme.PanelBottom, UITheme.Stone, UITheme.TextSecondary, UITheme.SizeCaption, null);
 
                 // Not yet implemented — see the class comment. Disabled is honest; a button that
                 // does nothing when tapped reads as a bug.

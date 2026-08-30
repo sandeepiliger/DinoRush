@@ -8,12 +8,16 @@ namespace DinoRush.Runtime
     // (docs/DECISIONS.md D12): hand-authoring Unity YAML from a container with no editor to
     // validate it is how you end up with a project that won't open.
     //
+    // Surfaces come from UISprites rather than flat colours, because the design is built from
+    // rounded gold-rimmed stone with gradients and depth — a solid-colour Image can only ever
+    // look like a flat rectangle.
+    //
     // Uses legacy UnityEngine.UI.Text rather than TextMeshPro deliberately. TMP requires a
     // one-time "Import TMP Essential Resources" editor step, and without it every label renders
-    // as a missing-glyph box — a failure that only shows up when someone opens the editor.
-    // Legacy Text with Unity's built-in font works with no imported assets at all. TMP is the
-    // right long-term choice and can be swapped in once the font pass happens (the design calls
-    // for Bebas Neue and Barlow, which need real font assets and a licence entry per section 57).
+    // as a missing-glyph box. Legacy Text with Unity's built-in font works with no imported
+    // assets at all. TMP is the right long-term choice and arrives with the font pass — the
+    // design calls for Bebas Neue and Barlow, which need real font assets and a licence entry
+    // per section 57.
     public static class UIFactory
     {
         private static Font _font;
@@ -49,15 +53,32 @@ namespace DinoRush.Runtime
             return image;
         }
 
-        // A carved-stone panel: dark fill inside a gold rim. The design draws this as a border
-        // plus an inset highlight; two nested images is the cheapest faithful approximation and
-        // costs one extra draw call rather than a custom shader.
-        public static RectTransform CreateStonePanel(string name, Transform parent, float rimThickness = 2f)
+        public static Image CreateSpriteImage(string name, Transform parent, Sprite sprite, Image.Type type = Image.Type.Sliced)
         {
-            var rim = CreatePanel(name, parent, UITheme.GoldRim);
-            var fill = CreatePanel("Fill", rim.transform, UITheme.PanelBottom);
-            Stretch(fill.rectTransform, rimThickness, rimThickness, rimThickness, rimThickness);
-            return rim.rectTransform;
+            var rect = CreateRect(name, parent);
+            var image = rect.gameObject.AddComponent<Image>();
+            image.sprite = sprite;
+            image.type = type;
+            return image;
+        }
+
+        // A carved stone panel: rounded, gold-rimmed, gradient-filled, sitting on a soft drop
+        // shadow. This is the design's core surface — menus, dialogs and pills are all this.
+        public static RectTransform CreateStonePanel(string name, Transform parent, int radius = 16)
+        {
+            var root = CreateRect(name, parent);
+
+            var shadow = CreateSpriteImage("Shadow", root,
+                UISprites.RoundedRect(new Color(0f, 0f, 0f, 0.55f), new Color(0f, 0f, 0f, 0.55f),
+                    new Color(0f, 0f, 0f, 0.55f), radius, 0));
+            Stretch(shadow.rectTransform, -3f, -3f, -6f, -8f);
+            shadow.raycastTarget = false;
+
+            var panel = CreateSpriteImage("Panel", root,
+                UISprites.RoundedRect(UITheme.PanelTop, UITheme.PanelBottom, UITheme.GoldRim, radius));
+            Stretch(panel.rectTransform);
+
+            return root;
         }
 
         public static Text CreateLabel(
@@ -78,57 +99,84 @@ namespace DinoRush.Runtime
             return text;
         }
 
-        // The design's chunky extruded button: a bright face sitting on a darker "depth" block.
-        // Pressing pushes the face down into the depth, which is what sells the 3D read without
-        // any art. onClick is wired here so callers never touch Button internals.
+        // The design's headline treatment: a gold vertical gradient over a hard offset shadow,
+        // which together read as embossed metal rather than flat yellow text.
+        public static Text CreateHeadline(
+            string name, Transform parent, string content, int size,
+            TextAnchor alignment = TextAnchor.MiddleCenter)
+        {
+            var text = CreateLabel(name, parent, content, size, Color.white, alignment, FontStyle.Bold);
+
+            var gradient = text.gameObject.AddComponent<GradientText>();
+            gradient.TopColor = UITheme.HeadlineTop;
+            gradient.BottomColor = UITheme.HeadlineBottom;
+
+            var shadow = text.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0.24f, 0.09f, 0.02f, 0.95f);
+            shadow.effectDistance = new Vector2(0f, -3f);
+
+            return text;
+        }
+
+        // The design's chunky extruded button: a bright rounded face sitting on a darker depth
+        // block. Pressing drives the face down into the depth, which is what sells the 3D read.
         public static Button CreateChunkyButton(
-            string name, Transform parent, string label, Color face, Color depth, Color textColor,
-            int fontSize, Action onClick)
+            string name, Transform parent, string label, Color faceTop, Color faceBottom, Color depth,
+            Color textColor, int fontSize, Action onClick)
         {
             var root = CreateRect(name, parent);
 
-            var shadow = CreatePanel("Depth", root, depth);
-            Stretch(shadow.rectTransform);
+            var depthImage = CreateSpriteImage("Depth", root,
+                UISprites.RoundedRect(depth, depth, depth, 14, 0));
+            Stretch(depthImage.rectTransform);
 
-            var faceImage = CreatePanel("Face", root, face);
-            Stretch(faceImage.rectTransform, 0, 0, 0, 6f); // 6px of depth showing beneath
+            var face = CreateSpriteImage("Face", root,
+                UISprites.RoundedRect(faceTop, faceBottom, UITheme.RimHighlight, 14, 2));
+            // The face floats above the depth block; the gap underneath is the extrusion.
+            Stretch(face.rectTransform, 0, 0, 0, 7f);
 
-            var text = CreateLabel("Label", faceImage.transform, label, fontSize, textColor, TextAnchor.MiddleCenter, FontStyle.Bold);
+            var text = CreateLabel("Label", face.transform, label, fontSize, textColor,
+                TextAnchor.MiddleCenter, FontStyle.Bold);
             Stretch(text.rectTransform);
 
             var button = root.gameObject.AddComponent<Button>();
-            button.targetGraphic = faceImage;
+            button.targetGraphic = face;
+            button.transition = Selectable.Transition.None; // the press animation drives the face instead
 
-            var colors = button.colors;
-            colors.normalColor = Color.white;
-            colors.highlightedColor = Color.white;
-            colors.pressedColor = new Color(0.85f, 0.85f, 0.85f);
-            colors.selectedColor = Color.white;
-            colors.disabledColor = new Color(0.5f, 0.5f, 0.5f, 0.6f);
-            colors.fadeDuration = 0.05f;
-            button.colors = colors;
+            var press = root.gameObject.AddComponent<ButtonPressEffect>();
+            press.Face = face.rectTransform;
 
             if (onClick != null) button.onClick.AddListener(() => onClick());
             return button;
         }
 
-        // A rounded stat pill — the coin/gem chips along the top of the design's menu and HUD.
+        // A rounded stat pill — the coin chips along the top of the design's menu and HUD.
         public static Text CreatePill(string name, Transform parent, string content, Color accent, out Image background)
         {
-            var rect = CreateStonePanel(name, parent);
+            var root = CreateStonePanel(name, parent, radius: 18);
 
-            var dot = CreatePanel("Accent", rect, accent);
+            var dot = CreateSpriteImage("Accent", root, UISprites.RoundedRect(accent, accent, accent, 32, 0));
             dot.rectTransform.anchorMin = new Vector2(0f, 0.5f);
             dot.rectTransform.anchorMax = new Vector2(0f, 0.5f);
             dot.rectTransform.pivot = new Vector2(0f, 0.5f);
-            dot.rectTransform.anchoredPosition = new Vector2(8f, 0f);
-            dot.rectTransform.sizeDelta = new Vector2(14f, 14f);
+            dot.rectTransform.anchoredPosition = new Vector2(9f, 0f);
+            dot.rectTransform.sizeDelta = new Vector2(16f, 16f);
+            dot.raycastTarget = false;
 
-            var text = CreateLabel("Value", rect, content, UITheme.SizeBody, UITheme.TextPrimary, TextAnchor.MiddleLeft, FontStyle.Bold);
-            Stretch(text.rectTransform, 28f, 10f, 0f, 0f);
+            var text = CreateLabel("Value", root, content, UITheme.SizeBody, UITheme.TextPrimary,
+                TextAnchor.MiddleLeft, FontStyle.Bold);
+            Stretch(text.rectTransform, 31f, 10f, 0f, 0f);
 
-            background = rect.GetComponent<Image>();
+            background = root.Find("Panel").GetComponent<Image>();
             return text;
+        }
+
+        // A soft glow, used behind headlines and focal elements.
+        public static Image CreateGlow(string name, Transform parent, Color colour)
+        {
+            var glow = CreateSpriteImage(name, parent, UISprites.RadialGlow(colour), Image.Type.Simple);
+            glow.raycastTarget = false;
+            return glow;
         }
 
         public static void SetAnchoredBox(RectTransform rect, Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot,

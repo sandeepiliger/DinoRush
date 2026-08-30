@@ -31,19 +31,18 @@ namespace DinoRush.Runtime
             var backdrop = UIFactory.CreatePanel("Backdrop", root, UITheme.Backdrop);
             UIFactory.Stretch(backdrop.rectTransform);
 
-            var panel = UIFactory.CreateStonePanel("Panel", root, rimThickness: 3f);
+            var panel = UIFactory.CreateStonePanel("Panel", root, radius: 20);
             UIFactory.SetAnchoredBox(panel,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 Vector2.zero, new Vector2(340f, 520f));
 
-            var title = UIFactory.CreateLabel("Title", panel, "GAME OVER",
-                UITheme.SizeTitle, UITheme.TextSecondary, TextAnchor.MiddleCenter, FontStyle.Bold);
+            var title = UIFactory.CreateHeadline("Title", panel, "GAME OVER", UITheme.SizeTitle);
             UIFactory.SetAnchoredBox(title.rectTransform,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(0f, -20f), new Vector2(300f, 34f));
 
             screen._newBestRibbon = UIFactory.CreateStonePanel("NewBest", panel);
-            screen._newBestRibbon.GetComponent<Image>().color = UITheme.Danger;
+            screen._newBestRibbon.Find("Panel").GetComponent<Image>().color = UITheme.Danger;
             UIFactory.SetAnchoredBox(screen._newBestRibbon,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(0f, -58f), new Vector2(230f, 28f));
@@ -52,8 +51,7 @@ namespace DinoRush.Runtime
             UIFactory.Stretch(ribbonLabel.rectTransform);
             screen._newBestRibbon.gameObject.SetActive(false);
 
-            screen._score = UIFactory.CreateLabel("Score", panel, "0",
-                UITheme.SizeDisplay, UITheme.GoldLight, TextAnchor.MiddleCenter, FontStyle.Bold);
+            screen._score = UIFactory.CreateHeadline("Score", panel, "0", UITheme.SizeDisplay);
             UIFactory.SetAnchoredBox(screen._score.rectTransform,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(0f, -104f), new Vector2(300f, 58f));
@@ -84,20 +82,20 @@ namespace DinoRush.Runtime
                 new Vector2(0f, -232f), new Vector2(290f, 54f));
 
             screen._doubleCoins = UIFactory.CreateChunkyButton("DoubleCoins", panel, "DOUBLE COINS",
-                UITheme.Coin, UITheme.DangerDeep, UITheme.TextOnGold, UITheme.SizeBody, onDoubleCoins);
+                UITheme.Coin, UITheme.GoldDeep, UITheme.DangerDeep, UITheme.TextOnGold, UITheme.SizeBody, onDoubleCoins);
             UIFactory.SetAnchoredBox((RectTransform)panel.Find("DoubleCoins"),
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                 new Vector2(0f, 148f), new Vector2(290f, 54f));
             screen._doubleCoinsLabel = screen._doubleCoins.transform.Find("Face/Label").GetComponent<Text>();
 
             UIFactory.CreateChunkyButton("Retry", panel, "RUN AGAIN",
-                UITheme.GoldLight, UITheme.DangerDeep, UITheme.TextOnGold, UITheme.SizeHeading, onRetry);
+                UITheme.GoldLight, UITheme.GoldDeep, UITheme.DangerDeep, UITheme.TextOnGold, UITheme.SizeHeading, onRetry);
             UIFactory.SetAnchoredBox((RectTransform)panel.Find("Retry"),
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                 new Vector2(0f, 80f), new Vector2(290f, 62f));
 
             UIFactory.CreateChunkyButton("Camp", panel, "CAMP",
-                UITheme.PanelTop, UITheme.Stone, UITheme.TextSecondary, UITheme.SizeBody, onMenu);
+                UITheme.PanelTop, UITheme.PanelBottom, UITheme.Stone, UITheme.TextSecondary, UITheme.SizeBody, onMenu);
             UIFactory.SetAnchoredBox((RectTransform)panel.Find("Camp"),
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                 new Vector2(0f, 24f), new Vector2(290f, 46f));

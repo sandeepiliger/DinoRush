@@ -23,6 +23,12 @@ namespace DinoRush.Runtime
         public static readonly Color TextSecondary = new Color32(0xFF, 0xD6, 0xA0, 0x99);
         public static readonly Color TextOnGold = Hex("3A1A06");
 
+        // Headline gradient — the design runs "DINO RUSH" from near-white through gold into a
+        // burnt orange, which is what makes it read as embossed metal rather than yellow text.
+        public static readonly Color HeadlineTop = Hex("FFF6DD");
+        public static readonly Color HeadlineBottom = Hex("C8720F");
+        public static readonly Color RimHighlight = Hex("FFE0A0");
+
         // Accents
         public static readonly Color Lava = Hex("FF8B32");
         public static readonly Color GoldLight = Hex("FFD07A");

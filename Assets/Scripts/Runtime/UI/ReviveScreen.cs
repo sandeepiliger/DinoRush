@@ -29,7 +29,7 @@ namespace DinoRush.Runtime
             var backdrop = UIFactory.CreatePanel("Backdrop", root, UITheme.Backdrop);
             UIFactory.Stretch(backdrop.rectTransform);
 
-            var panel = UIFactory.CreateStonePanel("Panel", root, rimThickness: 3f);
+            var panel = UIFactory.CreateStonePanel("Panel", root, radius: 20);
             UIFactory.SetAnchoredBox(panel,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 Vector2.zero, new Vector2(330f, 420f));
@@ -54,14 +54,12 @@ namespace DinoRush.Runtime
             screen._dial.rectTransform.offsetMin = Vector2.zero;
             screen._dial.rectTransform.offsetMax = Vector2.zero;
 
-            screen._countdown = UIFactory.CreateLabel("Countdown", panel, "4",
-                UITheme.SizeDisplay, UITheme.GoldLight, TextAnchor.MiddleCenter, FontStyle.Bold);
+            screen._countdown = UIFactory.CreateHeadline("Countdown", panel, "4", UITheme.SizeDisplay);
             UIFactory.SetAnchoredBox(screen._countdown.rectTransform,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(0f, -120f), new Vector2(160f, 64f));
 
-            var title = UIFactory.CreateLabel("Title", panel, "GET BACK UP?",
-                UITheme.SizeTitle, UITheme.TextPrimary, TextAnchor.MiddleCenter, FontStyle.Bold);
+            var title = UIFactory.CreateHeadline("Title", panel, "GET BACK UP?", UITheme.SizeTitle);
             UIFactory.SetAnchoredBox(title.rectTransform,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(0f, -186f), new Vector2(300f, 40f));
@@ -75,13 +73,13 @@ namespace DinoRush.Runtime
                 new Vector2(0f, -228f), new Vector2(280f, 60f));
 
             UIFactory.CreateChunkyButton("Accept", panel, "WATCH & REVIVE",
-                UITheme.GoldLight, UITheme.DangerDeep, UITheme.TextOnGold, UITheme.SizeHeading, onAccept);
+                UITheme.GoldLight, UITheme.GoldDeep, UITheme.DangerDeep, UITheme.TextOnGold, UITheme.SizeHeading, onAccept);
             UIFactory.SetAnchoredBox((RectTransform)panel.Find("Accept"),
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                 new Vector2(0f, 84f), new Vector2(280f, 62f));
 
             UIFactory.CreateChunkyButton("Decline", panel, "NO THANKS",
-                UITheme.PanelTop, UITheme.Stone, UITheme.TextSecondary, UITheme.SizeBody, onDecline);
+                UITheme.PanelTop, UITheme.PanelBottom, UITheme.Stone, UITheme.TextSecondary, UITheme.SizeBody, onDecline);
             UIFactory.SetAnchoredBox((RectTransform)panel.Find("Decline"),
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                 new Vector2(0f, 26f), new Vector2(280f, 46f));

@@ -49,7 +49,7 @@ namespace DinoRush.Runtime
                 new Vector2(-74f, -14f), new Vector2(96f, 34f));
 
             // Pause, top-right corner, thumb-reachable and away from the tap-to-jump area.
-            UIFactory.CreateChunkyButton("Pause", root, "II", UITheme.PanelTop, UITheme.Stone,
+            UIFactory.CreateChunkyButton("Pause", root, "II", UITheme.PanelTop, UITheme.PanelBottom, UITheme.Stone,
                 UITheme.TextPrimary, UITheme.SizeHeading, onPause);
             var pause = (RectTransform)root.Find("Pause");
             UIFactory.SetAnchoredBox(pause,
@@ -68,7 +68,7 @@ namespace DinoRush.Runtime
             UIFactory.SetAnchoredBox(hud._extinctionBanner,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(0f, -110f), new Vector2(280f, 34f));
-            hud._extinctionBanner.GetComponent<Image>().color = UITheme.Danger;
+            hud._extinctionBanner.Find("Panel").GetComponent<Image>().color = UITheme.Danger;
 
             hud._extinction = UIFactory.CreateLabel("ExtinctionLabel", hud._extinctionBanner, "EXTINCTION — SURVIVE!",
                 UITheme.SizeBody, UITheme.TextPrimary, TextAnchor.MiddleCenter, FontStyle.Bold);

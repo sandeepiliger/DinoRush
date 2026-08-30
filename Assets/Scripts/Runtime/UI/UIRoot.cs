@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 
 namespace DinoRush.Runtime
 {
@@ -32,10 +33,24 @@ namespace DinoRush.Runtime
 
             // uGUI needs an EventSystem for any button to receive input, and there is no scene
             // asset to have placed one — so create it here if the scene didn't bring one.
+            //
+            // InputSystemUIInputModule, NOT StandaloneInputModule. The legacy module reads
+            // UnityEngine.Input internally, and this project's activeInputHandler is set to the
+            // Input System package only — so it throws InvalidOperationException on the first
+            // pointer poll and no button ever receives a click.
             if (EventSystem.current == null)
             {
-                var events = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+                var events = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
                 events.transform.SetParent(parent, worldPositionStays: false);
+            }
+            else if (EventSystem.current.currentInputModule is StandaloneInputModule legacy)
+            {
+                // A scene-provided EventSystem (the URP template ships one) will carry the
+                // legacy module, which fails the same way. Swap it rather than leaving the UI
+                // dead.
+                var host = legacy.gameObject;
+                Object.Destroy(legacy);
+                host.AddComponent<InputSystemUIInputModule>();
             }
 
             root.SafeArea = UIFactory.CreateRect("SafeArea", go.transform);
