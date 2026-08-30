@@ -19,6 +19,11 @@ namespace DinoRush.Core
 
         public static Vec3 operator -(Vec3 a, Vec3 b) => new Vec3(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
         public static Vec3 operator +(Vec3 a, Vec3 b) => new Vec3(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
+        public static Vec3 operator *(Vec3 a, float s) => new Vec3(a.X * s, a.Y * s, a.Z * s);
+        public static Vec3 operator *(float s, Vec3 a) => new Vec3(a.X * s, a.Y * s, a.Z * s);
+        public static Vec3 operator -(Vec3 a) => new Vec3(-a.X, -a.Y, -a.Z);
+
+        public static Vec3 Lerp(Vec3 a, Vec3 b, float t) => a + (b - a) * t;
 
         public float Magnitude => (float)Math.Sqrt(X * X + Y * Y + Z * Z);
 

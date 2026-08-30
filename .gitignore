@@ -111,6 +111,7 @@ InitTestScene*.unity*
 # Core logic (see docs/DECISIONS.md D9). Un-ignore exactly those paths.
 !/src/**/*.csproj
 !/tests/**/*.csproj
+!/tools/**/*.csproj
 !/*.slnx
 !/*.sln
 
@@ -126,3 +127,12 @@ InitTestScene*.unity*
 # fighting MSBuild property-evaluation order further.
 /src/obj/
 /tests/**/obj/
+/tools/**/obj/
+
+# AssetForge's rendered previews and exported meshes. Regenerated on demand by
+# `dotnet run --project tools/AssetForge`; useful to look at, pointless to version.
+/tools/output/
+
+# Python bytecode from the preview scripts in tools/.
+__pycache__/
+*.pyc

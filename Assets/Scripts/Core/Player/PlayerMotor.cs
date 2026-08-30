@@ -35,6 +35,11 @@ namespace DinoRush.Core
         public float FeetHeightMeters { get; private set; }
         public PlayerStance Stance { get; private set; } = PlayerStance.Running;
 
+        // Exposed for presentation only. The animator needs to know whether a jump is on its way
+        // up or on its way down — a dinosaur tucks its legs while rising and reaches with them
+        // while falling, and the two look nothing alike.
+        public float VerticalVelocityMetersPerSecond => _verticalVelocity;
+
         public float CurrentHeightMeters =>
             Stance == PlayerStance.Ducking ? _config.DuckingHeightMeters : _config.StandingHeightMeters;
 

@@ -1,0 +1,8 @@
+<Project>
+  <!-- Same reason as src/Directory.Build.props: BaseIntermediateOutputPath has to be set
+       before the SDK props import, which only Directory.Build.props is early enough to do. -->
+  <PropertyGroup>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)../../artifacts/bin/AssetForge/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)../../artifacts/obj/AssetForge/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

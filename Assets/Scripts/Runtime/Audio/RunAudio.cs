@@ -21,6 +21,8 @@ namespace DinoRush.Runtime
         private AudioClip _jump;
         private AudioClip _coin;
         private AudioClip _hit;
+        private AudioClip _footstep;
+        private AudioClip _land;
 
         private void Awake()
         {
@@ -30,11 +32,24 @@ namespace DinoRush.Runtime
             _jump = CreateBlip("sfx_jump", startHz: 330f, endHz: 620f, seconds: 0.12f);
             _coin = CreateBlip("sfx_coin", startHz: 880f, endHz: 1320f, seconds: 0.09f);
             _hit = CreateBlip("sfx_hit", startHz: 220f, endHz: 70f, seconds: 0.32f);
+            _footstep = CreateBlip("sfx_step", startHz: 150f, endHz: 58f, seconds: 0.07f);
+            _land = CreateBlip("sfx_land", startHz: 190f, endHz: 48f, seconds: 0.16f);
         }
 
         public void PlayJump() => _source.PlayOneShot(_jump, 0.35f);
         public void PlayCoin() => _source.PlayOneShot(_coin, 0.30f);
         public void PlayHit() => _source.PlayOneShot(_hit, 0.55f);
+        public void PlayLand() => _source.PlayOneShot(_land, 0.30f);
+
+        // Quiet, and quieter still at a jittered pitch. Footsteps fire several times a second,
+        // so an identical sample at a fixed level turns into a machine-gun the ear locks onto
+        // within about two strides.
+        public void PlayFootstep()
+        {
+            _source.pitch = Random.Range(0.88f, 1.14f);
+            _source.PlayOneShot(_footstep, 0.16f);
+            _source.pitch = 1f;
+        }
 
         // A sine sweep with an exponential decay envelope — enough shape to read as a distinct
         // event without sounding like a click.

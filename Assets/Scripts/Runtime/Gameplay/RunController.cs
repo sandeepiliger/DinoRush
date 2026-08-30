@@ -46,6 +46,7 @@ namespace DinoRush.Runtime
         private RunCameraRig _cameraRig;
         private Renderer _groundRenderer;
         private Camera _camera;
+        private DinosaurView _dinosaur;
 
         private Transform _player;
         private Transform _cameraTransform;
@@ -101,6 +102,12 @@ namespace DinoRush.Runtime
             if (_camera != null) _camera.fieldOfView = _cameraRig.VerticalFovDegrees;
             _motor = new PlayerMotor(_motorConfig);
             _states = new GameStateMachine();
+
+            // Built here rather than in RunBootstrap because the model is sized against the
+            // collision box: DinosaurFactory rescales the rig until its *running* silhouette
+            // matches StandingHeightMeters, and that config is owned here.
+            _dinosaur = DinosaurView.Create(
+                player, DinosaurProfileLibrary.For(_services.Collection.Selected.Id), _motorConfig);
 
             _obstaclePool = new ObstaclePool(obstacleRoot, _motorConfig, prewarmCount: 24);
             _coinPool = new CoinPool(coinRoot, _runConfig.CoinRadiusMeters, prewarmCount: 48);
@@ -173,6 +180,7 @@ namespace DinoRush.Runtime
         {
             int seed = Random.Range(int.MinValue, int.MaxValue);
 
+            _dinosaur.ResetPose();
             _run = new SegmentGenerator(_runConfig).GenerateRun(seed, RunLengthMeters);
 
             var validation = new RunValidator(_runConfig).Validate(_run);
@@ -257,8 +265,34 @@ namespace DinoRush.Runtime
             }
         }
 
+        // The animator is driven by the state machine, not by whether the run is still
+        // simulating: a dead dinosaur still has to fall over, and a paused one still has to hold
+        // its pose rather than snapping back to the bind.
+        private void TickDinosaur(float deltaTime, WorldState world)
+        {
+            bool dead = _states.Current == GameState.GameOver || _states.Current == GameState.Revive;
+
+            _dinosaur.Tick(deltaTime, new DinosaurAnimationInput
+            {
+                Stance = _motor.Stance,
+                SpeedMetersPerSecond = dead ? 0f : _session.CurrentSpeed,
+                FeetHeightMeters = _motor.FeetHeightMeters,
+                VerticalVelocity = _motor.VerticalVelocityMetersPerSecond,
+                Dead = dead,
+                ExtinctionIntensity = world.ExtinctionIntensity,
+            });
+
+            // One footfall, one footstep sound. Driven by the gait rather than by a timer, so
+            // the sound lands on the frame the foot actually touches down, at any speed.
+            if (_dinosaur.Animator.ConsumeFootfall(out _)) _audio.PlayFootstep();
+        }
+
         private void TickGameOver(float deltaTime)
         {
+            // Keeps the collapse playing. Without this the animal freezes mid-stride the instant
+            // it dies, which is the single most obvious way to make a game look unfinished.
+            TickDinosaur(deltaTime, CurrentWorld);
+
             if (_reviveOfferRemaining <= 0f) return;
 
             _reviveOfferRemaining -= deltaTime;
@@ -435,8 +469,13 @@ namespace DinoRush.Runtime
         {
             float x = _session.DistanceMeters;
 
-            _player.position = new Vector3(x, _motor.FeetHeightMeters + _motor.CurrentHeightMeters * 0.5f, 0f);
-            _player.localScale = new Vector3(0.8f, _motor.CurrentHeightMeters * 0.5f, 0.8f);
+            // The model's origin is between its feet, so the transform sits at the motor's feet
+            // height directly. Nothing is scaled any more: the ducking silhouette comes from the
+            // animator crouching the animal, not from squashing a capsule, which is the whole
+            // reason DinosaurAnimator has to know the stance rather than just the position.
+            _player.position = new Vector3(x, _motor.FeetHeightMeters, 0f);
+
+            TickDinosaur(deltaTime, world);
 
             // Three-quarter view from behind and slightly to the side, looking down the track.
             //
