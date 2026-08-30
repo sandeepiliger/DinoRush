@@ -12,8 +12,9 @@ clean console, and Core was confirmed to produce byte-identical output under Uni
 under `dotnet test` (same seed, same segment/obstacle/coin counts) — which is what makes the
 seeded-determinism guarantees in sections 15 and 21 real rather than assumed.
 
-**M4 is in the repo**: a playable run — tap to jump, swipe down to duck, collide, die, restart.
-See "Playing the M4 run" below.
+**M4 and M5 are in the repo**: a playable run — tap to jump, swipe down to duck, collide, die,
+restart — plus collectible coins, pooled scenery, placeholder audio and a smoothed camera.
+See "Playing the run" below.
 
 Two notes on layout that are easy to trip over:
 
@@ -85,11 +86,16 @@ is a large, editor-version-specific file that shouldn't be hand-written blind.
    other changes — skipping this step is what causes GUID drift later ("The referenced script
    on this Behaviour is missing!").
 
-## Playing the M4 run
+## Playing the run
 
 Open the project and press **Play** — no scene setup needed. `RunBootstrap` builds the camera,
-ground, player and obstacle pool in code on load (D12), so it works from `SampleScene` or from
-an empty scene, reusing whatever camera and light the scene already has.
+ground, player, coins, scenery and pools in code on load (D12), so it works from `SampleScene`
+or from an empty scene, reusing whatever camera and light the scene already has.
+
+Gold discs are coins. Most sit at running height, but `CoinPattern` segments lay them in an arc
+peaking at the jump apex — those have to be jumped for, and are the one thing asking something
+of you on an otherwise safe stretch. Collection is an overlap test in Core, not a distance
+check, so an arc coin genuinely requires leaving the ground.
 
 | Action | Touch | Editor |
 |---|---|---|

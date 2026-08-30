@@ -55,9 +55,17 @@ namespace DinoRush.Runtime
 
             var obstacleRoot = new GameObject("Obstacles");
             obstacleRoot.transform.SetParent(root.transform);
+            var coinRoot = new GameObject("Coins");
+            coinRoot.transform.SetParent(root.transform);
+            var sceneryRoot = new GameObject("Scenery");
+            sceneryRoot.transform.SetParent(root.transform);
+
+            var audio = root.AddComponent<RunAudio>();
 
             var controller = root.AddComponent<RunController>();
-            controller.Initialise(player.transform, camera.transform, ground.transform, obstacleRoot.transform);
+            controller.Initialise(
+                player.transform, camera.transform, ground.transform,
+                obstacleRoot.transform, coinRoot.transform, sceneryRoot.transform, audio);
 
             root.AddComponent<RunHud>().Initialise(controller);
 

@@ -89,9 +89,20 @@ namespace DinoRush.Core
         private void ValidateCoinPlacement(RunGenerationResult result, List<string> violations)
         {
             float buffer = _config.MinObstacleGapMeters;
+            float maxHeight = _config.MaxCoinHeightMeters;
 
             foreach (var coin in result.Coins)
             {
+                // "Valid coin paths" (section 48) means two things: a coin must not sit where
+                // dodging an obstacle takes the player, and it must be physically reachable.
+                // An uncollectible coin isn't a fair challenge, it's a bug the player reads as
+                // the game cheating.
+                if (coin.HeightMeters > maxHeight)
+                {
+                    violations.Add(
+                        $"Coin at {coin.DistanceMeters}m sits at {coin.HeightMeters:F2}m, above the reachable ceiling of {maxHeight:F2}m (jump apex {_config.Player.JumpApexMeters:F2}m).");
+                }
+
                 foreach (var obstacle in result.Obstacles)
                 {
                     float zoneStart = obstacle.DistanceMeters - buffer;

@@ -24,9 +24,16 @@ namespace DinoRush.Core
     {
         public float DistanceMeters { get; }
 
-        public CoinSpawn(float distanceMeters)
+        // Height off the ground. Coins are not all at running height: arcs that peak near the
+        // jump apex reward jumping for its own sake, which is what makes an empty stretch of
+        // track worth playing instead of just waiting. RunValidator proves every coin is
+        // actually reachable given the player's jump.
+        public float HeightMeters { get; }
+
+        public CoinSpawn(float distanceMeters, float heightMeters)
         {
             DistanceMeters = distanceMeters;
+            HeightMeters = heightMeters;
         }
     }
 
