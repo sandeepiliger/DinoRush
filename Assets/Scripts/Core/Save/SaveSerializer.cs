@@ -32,6 +32,8 @@ namespace DinoRush.Core
             Append(body, "bestScore", data.BestScore.ToString(CultureInfo.InvariantCulture));
             Append(body, "tutorialCompleted", data.TutorialCompleted ? "1" : "0");
             Append(body, "removeAds", data.RemoveAdsPurchased ? "1" : "0");
+            Append(body, "missionDay",
+                data.DailyMissionDayIndex?.ToString(CultureInfo.InvariantCulture) ?? "");
             Append(body, "dailyStreakDay", data.DailyRewardStreakDay.ToString(CultureInfo.InvariantCulture));
             Append(body, "dailyLastClaimed",
                 data.DailyRewardLastClaimedDayIndex?.ToString(CultureInfo.InvariantCulture) ?? "");
@@ -86,6 +88,7 @@ namespace DinoRush.Core
                 BestScore = ReadInt(fields, "bestScore", 0),
                 TutorialCompleted = ReadInt(fields, "tutorialCompleted", 0) == 1,
                 RemoveAdsPurchased = ReadInt(fields, "removeAds", 0) == 1,
+                DailyMissionDayIndex = ReadNullableInt(fields, "missionDay"),
                 DailyRewardStreakDay = ReadInt(fields, "dailyStreakDay", 1),
                 DailyRewardLastClaimedDayIndex = ReadNullableInt(fields, "dailyLastClaimed"),
                 MissionProgress = DecodePairs(ReadString(fields, "missionProgress", "")),

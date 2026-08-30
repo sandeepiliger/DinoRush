@@ -41,7 +41,7 @@ namespace DinoRush.Runtime
 
         private void DrawGameOver(RunSession session)
         {
-            float width = 420f, height = 190f;
+            float width = 460f, height = 260f;
             var rect = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
 
             GUI.Box(rect, GUIContent.none);
@@ -50,6 +50,14 @@ namespace DinoRush.Runtime
             GUILayout.Label($"Score {session.Score:N0}     Best {_controller.BestScore:N0}", _small);
             GUILayout.Label($"Wallet {_controller.BankedCoins:N0} coins", _small);
             GUILayout.Label($"{session.DistanceMeters:F0} m     {session.CoinsCollected} coins", _small);
+            var completed = _controller.CompletedThisRun;
+            if (completed != null && completed.Count > 0)
+            {
+                GUILayout.Space(4);
+                foreach (var mission in completed)
+                    GUILayout.Label($"Mission complete: {mission.Id}  +{mission.CoinReward}", _small);
+            }
+
             GUILayout.Space(8);
             GUILayout.Label("Tap or press any key to run again", _small);
             GUILayout.EndArea();

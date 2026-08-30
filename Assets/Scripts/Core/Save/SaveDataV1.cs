@@ -15,6 +15,9 @@ namespace DinoRush.Core
         public bool TutorialCompleted { get; set; }
         public Dictionary<string, int> MissionProgress { get; set; } = new Dictionary<string, int>();
         public Dictionary<string, bool> MissionClaimed { get; set; } = new Dictionary<string, bool>();
+        // Which day's mission set MissionProgress refers to. Without this a new day's set
+        // would inherit yesterday's counters and complete instantly.
+        public int? DailyMissionDayIndex { get; set; }
         public int DailyRewardStreakDay { get; set; } = 1;
         public int? DailyRewardLastClaimedDayIndex { get; set; }
         public bool RemoveAdsPurchased { get; set; }

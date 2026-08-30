@@ -20,6 +20,11 @@ namespace DinoRush.Core
         public bool IsAlive { get; private set; } = true;
         public bool HasUsedRevive { get; private set; }
 
+        // Counted for missions ("jump over 20 obstacles"). Tracked here rather than recomputed
+        // from the generated run afterwards, because a revive means the player may pass the
+        // same stretch twice and both passes legitimately count.
+        public int ObstaclesCleared { get; private set; }
+
         public RunSession(RunGenerationConfig config, int seed)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
@@ -53,6 +58,21 @@ namespace DinoRush.Core
             if (!IsAlive) return;
             CoinsCollected += amount;
         }
+
+        public void RegisterObstacleCleared()
+        {
+            if (!IsAlive) return;
+            ObstaclesCleared++;
+        }
+
+        // A snapshot of everything progression systems care about. Passing this around rather
+        // than the live session keeps missions from being able to mutate a run in flight.
+        public RunSummary ToSummary() => new RunSummary(
+            distanceMeters: DistanceMeters,
+            coinsCollected: CoinsCollected,
+            survivalSeconds: ElapsedSeconds,
+            obstaclesCleared: ObstaclesCleared,
+            score: Score);
 
         public void Die()
         {

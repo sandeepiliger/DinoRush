@@ -32,6 +32,8 @@ namespace DinoRush.Runtime
         private RunAudio _audio;
         private BiomeSchedule _biomes;
         private SaveService _save;
+        private MissionTracker _missions;
+        private IReadOnlyList<MissionDefinition> _completedThisRun = new List<MissionDefinition>();
         private Renderer _groundRenderer;
         private Camera _camera;
 
@@ -72,6 +74,10 @@ namespace DinoRush.Runtime
 
             // Best score and coin balance carry across sessions from here on.
             _bestScore = _save.Data.BestScore;
+
+            // Roll the daily set over if the date changed while the game was closed.
+            _missions = new MissionTracker();
+            DailyMissionRotation.EnsureCurrent(_save.Data, GameClock.TodayIndexUtc, _missions);
 
             _states.TransitionTo(GameState.Menu);
             StartRun();
@@ -167,6 +173,9 @@ namespace DinoRush.Runtime
                 var (spawn, view) = _activeObstacles[i];
                 if (spawn.DistanceMeters + spawn.WidthMeters < distance - RecycleBehindMeters)
                 {
+                    // Recycling behind the player is precisely "got past it" — counting here
+                    // avoids a second pass over the obstacle list just to score them.
+                    _session.RegisterObstacleCleared();
                     _obstaclePool.Return(view);
                     _activeObstacles.RemoveAt(i);
                 }
@@ -282,11 +291,17 @@ namespace DinoRush.Runtime
             // so a run's coins are only kept once it actually ends.
             _save.Data.BestScore = _bestScore;
             _save.Data.Coins += _session.CoinsCollected;
+
+            _completedThisRun = _missions.ApplyRun(_session.ToSummary());
+            _missions.WriteTo(_save.Data);
+
             _save.Save();
 
             _states.TransitionTo(GameState.GameOver);
         }
 
         public int BankedCoins => _save != null ? _save.Data.Coins : 0;
+        public IReadOnlyList<MissionDefinition> CompletedThisRun => _completedThisRun;
+        public MissionTracker Missions => _missions;
     }
 }
