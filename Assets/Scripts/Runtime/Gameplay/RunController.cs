@@ -31,6 +31,7 @@ namespace DinoRush.Runtime
         private SceneryStrip _scenery;
         private RunAudio _audio;
         private BiomeSchedule _biomes;
+        private SaveService _save;
         private Renderer _groundRenderer;
         private Camera _camera;
 
@@ -48,8 +49,10 @@ namespace DinoRush.Runtime
 
         public void Initialise(
             Transform player, Transform cameraTransform, Transform ground,
-            Transform obstacleRoot, Transform coinRoot, Transform sceneryRoot, RunAudio audio)
+            Transform obstacleRoot, Transform coinRoot, Transform sceneryRoot, RunAudio audio,
+            SaveService save)
         {
+            _save = save;
             _player = player;
             _cameraTransform = cameraTransform;
             _ground = ground;
@@ -66,6 +69,9 @@ namespace DinoRush.Runtime
             _obstaclePool = new ObstaclePool(obstacleRoot, _motorConfig, prewarmCount: 24);
             _coinPool = new CoinPool(coinRoot, _runConfig.CoinRadiusMeters, prewarmCount: 48);
             _scenery = new SceneryStrip(sceneryRoot, prewarmCount: 28);
+
+            // Best score and coin balance carry across sessions from here on.
+            _bestScore = _save.Data.BestScore;
 
             _states.TransitionTo(GameState.Menu);
             StartRun();
@@ -270,7 +276,17 @@ namespace DinoRush.Runtime
         {
             _session.Die();
             if (_session.Score > _bestScore) _bestScore = _session.Score;
+
+            // Persist at the end of a run rather than during it: a write per frame would be
+            // wasteful, and death is the natural checkpoint. Coins earned are banked here too,
+            // so a run's coins are only kept once it actually ends.
+            _save.Data.BestScore = _bestScore;
+            _save.Data.Coins += _session.CoinsCollected;
+            _save.Save();
+
             _states.TransitionTo(GameState.GameOver);
         }
+
+        public int BankedCoins => _save != null ? _save.Data.Coins : 0;
     }
 }

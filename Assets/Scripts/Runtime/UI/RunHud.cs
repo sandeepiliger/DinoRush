@@ -48,6 +48,7 @@ namespace DinoRush.Runtime
             GUILayout.BeginArea(new Rect(rect.x + 24, rect.y + 20, width - 48, height - 40));
             GUILayout.Label("GAME OVER", _big);
             GUILayout.Label($"Score {session.Score:N0}     Best {_controller.BestScore:N0}", _small);
+            GUILayout.Label($"Wallet {_controller.BankedCoins:N0} coins", _small);
             GUILayout.Label($"{session.DistanceMeters:F0} m     {session.CoinsCollected} coins", _small);
             GUILayout.Space(8);
             GUILayout.Label("Tap or press any key to run again", _small);

@@ -62,10 +62,14 @@ namespace DinoRush.Runtime
 
             var audio = root.AddComponent<RunAudio>();
 
+            // Loaded once at boot, before anything reads progression state (section 53's
+            // startup order puts save first for exactly this reason).
+            var save = new SaveService();
+
             var controller = root.AddComponent<RunController>();
             controller.Initialise(
                 player.transform, camera.transform, ground.transform,
-                obstacleRoot.transform, coinRoot.transform, sceneryRoot.transform, audio);
+                obstacleRoot.transform, coinRoot.transform, sceneryRoot.transform, audio, save);
 
             root.AddComponent<RunHud>().Initialise(controller);
 
