@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The asset pipeline's driver (CLAUDE.md section 10). It compiles the same generator sources
+    the game does and writes them out as inspectable files: OBJ meshes, PNG textures, and pose
+    dumps for the preview renderer.
+
+    It exists because a generated asset that nobody has looked at is not an asset, it is a
+    hypothesis. Section 69 rule 17 — never say something works without validating it — is hard
+    to honour for geometry unless there is a way to see the geometry, and this is that way,
+    with no Unity editor and no manual step in between.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>AssetForge</AssemblyName>
+    <RootNamespace>DinoRush.AssetForge</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="*.cs" />
+    <!-- The generator itself, compiled from the same files Unity compiles. Referencing
+         src/DinoRush.Core.csproj instead would work, but its netstandard2.1 target drags a
+         compatibility shim into a tool that only ever runs on the desktop SDK. -->
+    <Compile Include="../../Assets/Scripts/Core/Art/**/*.cs" />
+    <Compile Include="../../Assets/Scripts/Core/World/Vec3.cs" />
+    <Compile Include="../../Assets/Scripts/Core/World/PaletteColor.cs" />
+    <Compile Include="../../Assets/Scripts/Core/Player/PlayerMotorConfig.cs" />
+    <!-- For PlayerStance, which the animator reads. -->
+    <Compile Include="../../Assets/Scripts/Core/Player/PlayerMotor.cs" />
+  </ItemGroup>
+
+</Project>

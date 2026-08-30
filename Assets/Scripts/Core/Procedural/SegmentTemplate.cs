@@ -8,13 +8,13 @@ namespace DinoRush.Core
         public SegmentType Type { get; }
         public float LengthMeters { get; }
         public IReadOnlyList<(float OffsetMeters, float WidthMeters, PlayerAction Action)> Obstacles { get; }
-        public IReadOnlyList<float> CoinOffsetsMeters { get; }
+        public IReadOnlyList<(float OffsetMeters, float HeightMeters)> Coins { get; }
 
         public SegmentTemplate(
             SegmentType type,
             float lengthMeters,
             IReadOnlyList<(float, float, PlayerAction)> obstacles,
-            IReadOnlyList<float> coinOffsetsMeters)
+            IReadOnlyList<(float, float)> coins)
         {
             if (lengthMeters <= 0) throw new ArgumentOutOfRangeException(nameof(lengthMeters));
 
@@ -23,16 +23,18 @@ namespace DinoRush.Core
                 if (offset < 0 || offset + width > lengthMeters)
                     throw new ArgumentException($"Obstacle at {offset}m (width {width}m) does not fit within a {lengthMeters}m segment.", nameof(obstacles));
             }
-            foreach (var offset in coinOffsetsMeters)
+            foreach (var (offset, height) in coins)
             {
                 if (offset < 0 || offset > lengthMeters)
-                    throw new ArgumentException($"Coin at {offset}m falls outside a {lengthMeters}m segment.", nameof(coinOffsetsMeters));
+                    throw new ArgumentException($"Coin at {offset}m falls outside a {lengthMeters}m segment.", nameof(coins));
+                if (height < 0)
+                    throw new ArgumentException($"Coin at {offset}m has a negative height.", nameof(coins));
             }
 
             Type = type;
             LengthMeters = lengthMeters;
             Obstacles = obstacles;
-            CoinOffsetsMeters = coinOffsetsMeters;
+            Coins = coins;
         }
     }
 
@@ -53,20 +55,22 @@ namespace DinoRush.Core
         {
             float gap = config.MinObstacleGapMeters;
             float width = config.ObstacleWidthMeters;
+            float runHeight = config.Player.StandingHeightMeters * 0.4f;
 
             return new[]
             {
+                // Running-height coins: collected simply by not dying.
                 new SegmentTemplate(SegmentType.Safe, gap * 3f,
                     Array.Empty<(float, float, PlayerAction)>(),
-                    new[] { gap * 0.5f, gap * 1.5f, gap * 2.5f }),
+                    new[] { (gap * 0.5f, runHeight), (gap * 1.5f, runHeight), (gap * 2.5f, runHeight) }),
 
                 BuildObstacleTemplate(SegmentType.SmallObstacle, gap, width, PlayerAction.Jump),
 
                 BuildObstacleTemplate(SegmentType.JumpChallenge, gap, width, PlayerAction.Jump, PlayerAction.Jump),
 
-                new SegmentTemplate(SegmentType.CoinPattern, gap * 3f,
-                    Array.Empty<(float, float, PlayerAction)>(),
-                    new[] { gap * 0.4f, gap * 1.0f, gap * 1.6f, gap * 2.2f, gap * 2.8f }),
+                // An arc peaking near the jump apex — the one segment that rewards jumping when
+                // nothing is forcing you to, so a safe stretch still asks something of the player.
+                BuildCoinArcTemplate(config, gap),
 
                 BuildObstacleTemplate(SegmentType.Enemy, gap, width, PlayerAction.Duck),
 
@@ -74,6 +78,26 @@ namespace DinoRush.Core
 
                 BuildObstacleTemplate(SegmentType.HighDifficulty, gap, width, PlayerAction.Jump, PlayerAction.Duck, PlayerAction.Jump),
             };
+        }
+
+        private static SegmentTemplate BuildCoinArcTemplate(RunGenerationConfig config, float gap)
+        {
+            float length = gap * 3f;
+            float peak = config.MaxCoinHeightMeters;
+            float baseHeight = config.Player.StandingHeightMeters * 0.4f;
+
+            // Five coins tracing a shallow parabola from running height up to the peak and back.
+            var coins = new List<(float, float)>(5);
+            const int count = 5;
+            for (int i = 0; i < count; i++)
+            {
+                float t = i / (float)(count - 1);          // 0..1 across the segment
+                float arc = 1f - (2f * t - 1f) * (2f * t - 1f); // 0 at the ends, 1 in the middle
+                coins.Add((length * (0.15f + 0.7f * t), baseHeight + (peak - baseHeight) * arc));
+            }
+
+            return new SegmentTemplate(SegmentType.CoinPattern, length,
+                Array.Empty<(float, float, PlayerAction)>(), coins);
         }
 
         // Lays out a chain of obstacles each separated by exactly `gap`, with a leading and
@@ -88,7 +112,7 @@ namespace DinoRush.Core
                 cursor += width + gap;
             }
             float length = cursor;
-            return new SegmentTemplate(type, length, obstacles, Array.Empty<float>());
+            return new SegmentTemplate(type, length, obstacles, Array.Empty<(float, float)>());
         }
     }
 

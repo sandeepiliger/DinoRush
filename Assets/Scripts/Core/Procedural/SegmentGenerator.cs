@@ -36,8 +36,8 @@ namespace DinoRush.Core
 
                 foreach (var (offset, width, action) in template.Obstacles)
                     obstacles.Add(new ObstacleSpawn(cumulativeDistance + offset, width, action));
-                foreach (var offset in template.CoinOffsetsMeters)
-                    coins.Add(new CoinSpawn(cumulativeDistance + offset));
+                foreach (var (offset, height) in template.Coins)
+                    coins.Add(new CoinSpawn(cumulativeDistance + offset, height));
 
                 segments.Add(new GeneratedSegment(template.Type, cumulativeDistance, template.LengthMeters, tier.Tier));
 

@@ -12,9 +12,16 @@ namespace DinoRush.Core
         public List<string> UnlockedDinosaurIds { get; set; } = new List<string> { "velociraptor" };
         public int Coins { get; set; }
         public int BestScore { get; set; }
+
+        // Tracked separately from BestScore because score folds in coins — a distance-gated
+        // unlock must measure distance, not a number that coin luck can inflate.
+        public int BestDistanceMeters { get; set; }
         public bool TutorialCompleted { get; set; }
         public Dictionary<string, int> MissionProgress { get; set; } = new Dictionary<string, int>();
         public Dictionary<string, bool> MissionClaimed { get; set; } = new Dictionary<string, bool>();
+        // Which day's mission set MissionProgress refers to. Without this a new day's set
+        // would inherit yesterday's counters and complete instantly.
+        public int? DailyMissionDayIndex { get; set; }
         public int DailyRewardStreakDay { get; set; } = 1;
         public int? DailyRewardLastClaimedDayIndex { get; set; }
         public bool RemoveAdsPurchased { get; set; }
@@ -44,6 +51,7 @@ namespace DinoRush.Core
                 data.UnlockedDinosaurIds.Add(data.SelectedDinosaurId);
             if (data.Coins < 0) data.Coins = 0;
             if (data.BestScore < 0) data.BestScore = 0;
+            if (data.BestDistanceMeters < 0) data.BestDistanceMeters = 0;
             data.MissionProgress ??= new Dictionary<string, int>();
             data.MissionClaimed ??= new Dictionary<string, bool>();
             if (data.DailyRewardStreakDay < 1 || data.DailyRewardStreakDay > 7) data.DailyRewardStreakDay = 1;

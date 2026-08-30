@@ -12,8 +12,14 @@ clean console, and Core was confirmed to produce byte-identical output under Uni
 under `dotnet test` (same seed, same segment/obstacle/coin counts) — which is what makes the
 seeded-determinism guarantees in sections 15 and 21 real rather than assumed.
 
-**M4 is in the repo**: a playable run — tap to jump, swipe down to duck, collide, die, restart.
-See "Playing the M4 run" below.
+**M4 through M10 are in the repo.** A playable run (jump, duck, collide, die, restart) with
+collectible coins, a jungle-to-volcanic biome escalation ending in extinction mode, durable
+save with corruption recovery, daily missions, a deterministic daily challenge, a dinosaur
+collection with unlock rules, and ad/IAP/analytics/remote-config abstractions behind mock
+providers — including a working rewarded-revive and double-coins flow. See "Playing the run".
+
+Still outstanding: the real UI (M7 — the design canvas's screens as uGUI), production art, and
+the placeholder replacements listed at the bottom of this file.
 
 Two notes on layout that are easy to trip over:
 
@@ -85,21 +91,32 @@ is a large, editor-version-specific file that shouldn't be hand-written blind.
    other changes — skipping this step is what causes GUID drift later ("The referenced script
    on this Behaviour is missing!").
 
-## Playing the M4 run
+## Playing the run
 
 Open the project and press **Play** — no scene setup needed. `RunBootstrap` builds the camera,
-ground, player and obstacle pool in code on load (D12), so it works from `SampleScene` or from
-an empty scene, reusing whatever camera and light the scene already has.
+ground, player, coins, scenery and pools in code on load (D12), so it works from `SampleScene`
+or from an empty scene, reusing whatever camera and light the scene already has.
+
+Gold discs are coins. Most sit at running height, but `CoinPattern` segments lay them in an arc
+peaking at the jump apex — those have to be jumped for, and are the one thing asking something
+of you on an otherwise safe stretch. Collection is an overlap test in Core, not a distance
+check, so an arc coin genuinely requires leaving the ground.
 
 | Action | Touch | Editor |
 |---|---|---|
 | Jump | tap | Space / W / ↑, or left-click |
 | Duck | swipe down | S / ↓, or drag down |
 | Restart after dying | tap | any key |
+| Revive / double coins | on-screen buttons | click the buttons |
 
-Everything on screen is a primitive placeholder, per section 72 — the point of M4 is proving the
-run feels right before any art exists. Gold capsule is the player; rust-coloured blocks are
-ground obstacles to jump; purple blocks hang overhead and must be ducked under.
+Everything on screen is a primitive placeholder, per section 72 — the point is proving the run
+feels right before any art exists. Gold capsule is the player; rust-coloured blocks are ground
+obstacles to jump; purple blocks hang overhead and must be ducked under.
+
+Survive past 90 seconds and the world turns volcanic; past 120 and extinction mode starts, with
+the camera shake building as it takes hold. Die and you get a 4-second revive offer before the
+results screen — the ad provider is a mock, so it always "succeeds", which is the point: it
+exercises the real flow without needing an ad network.
 
 A note on tap timing: jump fires on finger *release*, not touch-down. It has to — a swipe-down
 starts with a touch-down too, so firing a jump there would make every duck attempt jump first.
@@ -157,3 +174,22 @@ everywhere else — so don't skip it once you're collaborating with anyone else 
 Not wired up yet (that lands around M9–M10 per `docs/FOUNDATION_PLAN.md`). When it is, it will
 use `game-ci/unity-builder@v5` reading `unityVersion: auto` from `ProjectSettings/ProjectVersion.txt`
 — which is exactly why getting that file right at M3 matters beyond just your local machine.
+
+## Placeholder implementations that MUST be replaced before release
+
+Section 70 says that when a service isn't available, build the abstraction and a temporary
+stand-in rather than inventing something that breaks later. Several of those stand-ins now
+exist, and each is a release blocker. They live in `Core` (so they compile into a build), which
+is convenient during development and dangerous at ship time.
+
+| Placeholder | Replace with | Why it blocks release |
+|---|---|---|
+| `MockIapProvider` | Unity IAP 5.4.2+ (Google Play Billing 9) | Section 56 forbids fake purchase paths. Shipping this would grant paid content for free. |
+| `MockAdProvider` | Google Mobile Ads Unity plugin, **test unit IDs during development** | No revenue, and section 23 forbids production ad IDs before release. |
+| `MockAnalyticsProvider` | The chosen analytics SDK (vendor still undecided) | Events go to memory and vanish; every metric in section 77 would read zero. |
+| `RunAudio` synthesised blips | Real audio assets with a licence recorded in `LICENSES/THIRD_PARTY_ASSETS.md` | Placeholder sound, and section 57 requires licence provenance for anything shipped. |
+| `RunHud` (IMGUI) | uGUI screens built to the design canvas | IMGUI allocates every frame, which section 35 forbids. |
+| Capsule/cube primitives | Rigged dinosaur and biome art | Section 83's release checklist requires no placeholder assets. |
+
+The consent flow (UMP) noted in `docs/DECISIONS.md` D8 is also still outstanding and gates
+serving ads to EU users.
