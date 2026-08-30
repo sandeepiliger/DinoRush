@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    This project has no source files of its own. It compiles the exact same .cs files that
+    Unity compiles via Assets/Scripts/Core/DinoRush.Core.asmdef, so `dotnet test` and the
+    Unity editor are always checking the same code — see docs/DECISIONS.md D9.
+
+    Settings below are chosen to match what Unity 6's Core-side compiler actually accepts,
+    not modern SDK-style defaults, so nothing compiles here that would fail in the editor.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AssemblyName>DinoRush.Core</AssemblyName>
+    <RootNamespace>DinoRush.Core</RootNamespace>
+    <!-- Output paths (kept out of src/ entirely; see .gitignore's /artifacts/ entry) are set
+         in Directory.Build.props alongside this file, not here — see that file for why. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../Assets/Scripts/Core/**/*.cs" />
+  </ItemGroup>
+
+</Project>
