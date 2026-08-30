@@ -23,14 +23,6 @@ namespace DinoRush.Runtime
         // doesn't hand them an instant second death.
         private const float ReviveClearanceMeters = 25f;
 
-        // Camera rig. Trail is how far behind the player the camera sits, Side how far off the
-        // running line, LookAhead how far down the track it aims. Side is deliberately small
-        // relative to Trail: enough to keep the dinosaur's silhouette readable in profile,
-        // without swinging so wide that the track stops receding up the screen.
-        private const float CameraTrail = 9f;
-        private const float CameraHeight = 4.6f;
-        private const float CameraSide = 5.5f;
-        private const float CameraLookAhead = 22f;
 
         private readonly RunInputReader _input = new RunInputReader();
         private readonly List<(ObstacleSpawn spawn, GameObject view)> _activeObstacles =
@@ -51,6 +43,7 @@ namespace DinoRush.Runtime
         private RunAudio _audio;
         private GameUI _ui;
         private BiomeSchedule _biomes;
+        private RunCameraRig _cameraRig;
         private Renderer _groundRenderer;
         private Camera _camera;
 
@@ -102,8 +95,10 @@ namespace DinoRush.Runtime
             _runConfig = RunGenerationConfig.CreateDefault();
             _motorConfig = _runConfig.Player;
             _biomes = new BiomeSchedule(_runConfig.Difficulty);
+            _cameraRig = RunCameraRig.CreateDefault();
             _groundRenderer = ground.GetComponent<Renderer>();
             _camera = cameraTransform.GetComponent<Camera>();
+            if (_camera != null) _camera.fieldOfView = _cameraRig.VerticalFovDegrees;
             _motor = new PlayerMotor(_motorConfig);
             _states = new GameStateMachine();
 
@@ -458,14 +453,16 @@ namespace DinoRush.Runtime
             // dinosaur stays readable AND upcoming obstacles are visible — the second of which
             // side-on cannot satisfy here. A three-quarter rear view meets both, and shows a 3D
             // model far better than a flat profile does.
-            var target = new Vector3(x - CameraTrail, CameraHeight, -CameraSide);
+            // Position and aim both come from RunCameraRig, whose framing is unit-tested
+            // against the portrait aspect — see RunCameraRigTests. Hand-tuning these numbers
+            // here is what put the player off-screen twice.
+            var target = _cameraRig.GetPosition(x).ToVector3();
             _cameraTransform.position = _cameraSnapped
                 ? Vector3.Lerp(_cameraTransform.position, target, 1f - Mathf.Exp(-12f * deltaTime))
                 : target;
             _cameraSnapped = true;
 
-            // Aim ahead of the player, not at them, so most of the screen is the track to come.
-            var lookAt = new Vector3(x + CameraLookAhead, 1.2f, 0f);
+            var lookAt = _cameraRig.GetLookTarget(x).ToVector3();
             _cameraTransform.rotation = Quaternion.LookRotation(lookAt - _cameraTransform.position);
 
             // Section 38: shake must stay subtle. Driven by extinction intensity so it builds

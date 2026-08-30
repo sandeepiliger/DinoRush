@@ -32,10 +32,10 @@ namespace DinoRush.Runtime
                 var cameraObject = new GameObject("Main Camera") { tag = "MainCamera" };
                 camera = cameraObject.AddComponent<Camera>();
             }
-            // Orientation is set every frame by RunController (it looks down the track), so
-            // only the lens is configured here.
+            // Both orientation and field of view are driven by RunController from
+            // RunCameraRig, whose framing is unit-tested; only the clear colour is set here,
+            // and the biome palette overwrites that each frame anyway.
             camera.backgroundColor = new Color(0.36f, 0.45f, 0.30f);
-            camera.fieldOfView = 62f;
 
             if (Object.FindAnyObjectByType<Light>() == null)
             {
