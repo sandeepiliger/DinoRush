@@ -30,6 +30,9 @@ namespace DinoRush.Runtime
         private CoinPool _coinPool;
         private SceneryStrip _scenery;
         private RunAudio _audio;
+        private BiomeSchedule _biomes;
+        private Renderer _groundRenderer;
+        private Camera _camera;
 
         private Transform _player;
         private Transform _cameraTransform;
@@ -54,6 +57,9 @@ namespace DinoRush.Runtime
 
             _runConfig = RunGenerationConfig.CreateDefault();
             _motorConfig = _runConfig.Player;
+            _biomes = new BiomeSchedule(_runConfig.Difficulty);
+            _groundRenderer = ground.GetComponent<Renderer>();
+            _camera = cameraTransform.GetComponent<Camera>();
             _motor = new PlayerMotor(_motorConfig);
             _states = new GameStateMachine();
 
@@ -113,10 +119,13 @@ namespace DinoRush.Runtime
 
             if (wasGrounded && _motor.Stance == PlayerStance.Airborne) _audio.PlayJump();
 
-            SyncObstacles();
+            var world = _biomes.GetWorldState(_session.ElapsedSeconds);
+            ApplyWorld(world);
+
+            SyncObstacles(world.Palette);
             SyncCoins();
-            _scenery.Sync(_session.DistanceMeters);
-            PositionViews(deltaTime);
+            _scenery.Sync(_session.DistanceMeters, world.Palette);
+            PositionViews(deltaTime, world);
 
             if (HasHitSomething())
             {
@@ -135,7 +144,7 @@ namespace DinoRush.Runtime
             }
         }
 
-        private void SyncObstacles()
+        private void SyncObstacles(BiomePalette palette)
         {
             float distance = _session.DistanceMeters;
 
@@ -143,7 +152,7 @@ namespace DinoRush.Runtime
                    _run.Obstacles[_nextObstacleIndex].DistanceMeters < distance + SpawnAheadMeters)
             {
                 var spawn = _run.Obstacles[_nextObstacleIndex];
-                _activeObstacles.Add((spawn, _obstaclePool.Rent(spawn, spawn.DistanceMeters)));
+                _activeObstacles.Add((spawn, _obstaclePool.Rent(spawn, spawn.DistanceMeters, palette)));
                 _nextObstacleIndex++;
             }
 
@@ -209,7 +218,7 @@ namespace DinoRush.Runtime
             return false;
         }
 
-        private void PositionViews(float deltaTime)
+        private void PositionViews(float deltaTime, WorldState world)
         {
             // The world is authored in absolute metres and the player advances through it,
             // rather than the world scrolling past a stationary player. That keeps Unity
@@ -229,8 +238,33 @@ namespace DinoRush.Runtime
                 : target;
             _cameraSnapped = true;
 
+            // Section 38: shake must stay subtle. It is driven by extinction intensity so it
+            // builds with the collapse instead of switching on, and peaks at a few centimetres
+            // — enough to feel the world coming apart without making obstacles hard to read.
+            if (world.ExtinctionIntensity > 0f)
+            {
+                float amplitude = 0.12f * world.ExtinctionIntensity;
+                _cameraTransform.position += new Vector3(
+                    (Mathf.PerlinNoise(Time.time * 13f, 0f) - 0.5f) * amplitude,
+                    (Mathf.PerlinNoise(0f, Time.time * 17f) - 0.5f) * amplitude,
+                    0f);
+            }
+
             _ground.position = new Vector3(x, -0.5f, 0f);
         }
+
+        private void ApplyWorld(WorldState world)
+        {
+            // Sky and ground are two writes per frame, so they track the blend continuously;
+            // spawned objects take their colour on rent instead (see ObstaclePool.Rent).
+            if (_camera != null) _camera.backgroundColor = world.Palette.Sky.ToColor();
+            if (_groundRenderer != null) _groundRenderer.material.color = world.Palette.Ground.ToColor();
+        }
+
+        public WorldState CurrentWorld =>
+            _biomes != null && _session != null
+                ? _biomes.GetWorldState(_session.ElapsedSeconds)
+                : default;
 
         private void EndRun()
         {

@@ -28,7 +28,11 @@ namespace DinoRush.Runtime
             GUILayout.BeginArea(new Rect(20, 20, 420, 180));
             GUILayout.Label($"{session.Score:N0}", _big);
             GUILayout.Label($"{session.DistanceMeters:F0} m     coins {session.CoinsCollected}", _small);
-            GUILayout.Label($"{session.CurrentTier}     {session.CurrentSpeed:F1} m/s", _small);
+            var world = _controller.CurrentWorld;
+            string biome = world.Biome != null ? world.Biome.DisplayName : "—";
+            GUILayout.Label($"{biome}     {session.CurrentSpeed:F1} m/s", _small);
+            if (world.IsExtinctionActive)
+                GUILayout.Label("EXTINCTION — SURVIVE!", _big);
             GUILayout.EndArea();
 
             if (_controller.State == GameState.GameOver)

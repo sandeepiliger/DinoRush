@@ -37,11 +37,11 @@ namespace DinoRush.Runtime
             _nextMarkerDistance = 0f;
         }
 
-        public void Sync(float playerDistance)
+        public void Sync(float playerDistance, BiomePalette palette)
         {
             while (_nextMarkerDistance < playerDistance + AheadMeters)
             {
-                Place(_nextMarkerDistance);
+                Place(_nextMarkerDistance, palette);
                 _nextMarkerDistance += SpacingMeters;
             }
 
@@ -49,7 +49,7 @@ namespace DinoRush.Runtime
                 _idle.Push(Deactivate(_active.Dequeue()));
         }
 
-        private void Place(float distance)
+        private void Place(float distance, BiomePalette palette)
         {
             var instance = _idle.Count > 0 ? _idle.Pop() : CreateInstance();
 
@@ -60,6 +60,8 @@ namespace DinoRush.Runtime
 
             instance.transform.localScale = new Vector3(0.5f, height, 0.5f);
             instance.transform.position = new Vector3(distance + jitter, height * 0.5f, side);
+            // Tinted at spawn, like obstacles — see ObstaclePool.Rent for why.
+            instance.GetComponent<Renderer>().material.color = palette.Scenery.ToColor();
             instance.SetActive(true);
             _active.Enqueue(instance);
         }

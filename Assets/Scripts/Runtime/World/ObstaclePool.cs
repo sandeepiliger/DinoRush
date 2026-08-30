@@ -26,7 +26,11 @@ namespace DinoRush.Runtime
 
         public int TotalCreated => _all.Count;
 
-        public GameObject Rent(ObstacleSpawn spawn, float worldX)
+        // The palette is applied at spawn time rather than re-tinting live objects every frame.
+        // That's both cheaper (a hundred material writes per frame is real cost on mobile) and
+        // better looking: obstacles spawn ~60m ahead, so during a biome blend the world in the
+        // distance turns volcanic first and the change sweeps toward the player.
+        public GameObject Rent(ObstacleSpawn spawn, float worldX, BiomePalette palette)
         {
             var instance = _idle.Count > 0 ? _idle.Pop() : CreateInstance();
 
@@ -44,8 +48,8 @@ namespace DinoRush.Runtime
             // Ground obstacles read as solid hazards, overhead ones as things to slip under.
             var renderer = instance.GetComponent<Renderer>();
             renderer.material.color = isGroundObstacle
-                ? new Color(0.65f, 0.25f, 0.15f)
-                : new Color(0.35f, 0.30f, 0.55f);
+                ? palette.GroundObstacle.ToColor()
+                : palette.OverheadObstacle.ToColor();
 
             instance.SetActive(true);
             return instance;
