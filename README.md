@@ -1,39 +1,46 @@
-# Dino Rush: Extinction Run
+# Dino Park Tycoon
 
-An Android-first, hybrid-casual endless runner built in Unity + C# by Iliger Games. The player
-controls a dinosaur fleeing forward while the world behind it progressively collapses —
-jungle, into desert, into a volcanic extinction-level climax.
+An idle park-management game by **Iliger Games**. Hatch dinosaurs, build enclosures, attract visitors
+and grow your park — city by city.
 
-Run. Survive. Escape Extinction.
+Every character, prop, icon, sound effect and music track is **generated in code**: no downloaded art or
+audio assets.
 
-## Start here
+<p>
+  <img src="docs/screenshots/park.png" width="240" alt="Full park">
+  <img src="docs/screenshots/upgrade.png" width="240" alt="Upgrade panel">
+  <img src="docs/screenshots/unlock.png" width="240" alt="Unlocking a new dinosaur">
+</p>
 
-- **[CLAUDE.md](CLAUDE.md)** — the full product and architecture specification. Read this
-  before touching anything; every design and engineering decision in this repo traces back to
-  a numbered section in it.
-- **[docs/SPEC_ANALYSIS.md](docs/SPEC_ANALYSIS.md)** — the analysis pass over the spec and UI
-  design: contradictions found, gaps identified, environment constraints discovered.
-- **[docs/DECISIONS.md](docs/DECISIONS.md)** — the resulting architecture decisions (ADRs),
-  each with its rationale and the trigger that would justify revisiting it.
-- **[docs/FOUNDATION_PLAN.md](docs/FOUNDATION_PLAN.md)** — the milestone ladder from an empty
-  repo to a playable vertical slice, and beyond.
-- **[docs/SETUP.md](docs/SETUP.md)** — how to build and test the Core logic (any machine with
-  the .NET SDK), and how to bring Unity into the repo for the first time.
-- **[docs/design/](docs/design/)** — the UI design canvas (20 screens) this project's front-end
-  is being built against.
+*Screenshots are real captures of the current build (headless Chromium, 412×870 phone viewport).*
 
-## Current status
-
-Pre-Unity. The gameplay-critical logic (difficulty curve, procedural segment generation and
-validation, economy, missions, save system) is being built and tested as a Unity-free C#
-assembly first — see `docs/DECISIONS.md` D9 for why. The Unity project itself lands at
-milestone M3.
+## Run it
 
 ```bash
-dotnet test tests/DinoRush.Core.Tests
+npm install
+npm run dev        # open the printed URL on your phone (same Wi-Fi) or in a desktop browser
 ```
+
+## Check it
+
+```bash
+npm run typecheck
+npm test           # economy, balance pacing, save/load, visitor simulation
+npm run balance    # prints how long a smart player takes to unlock each species
+npm run build      # production bundle in dist/
+npm run check:prod # loads the production bundle in headless Chromium, fails on any error
+npm run screenshot # scripted play session -> screenshots/*.png  (basic | rich | zoom)
+npm run gallery    # every dinosaur side by side -> screenshots/
+```
+
+The character gallery is also available in dev at `/gallery.html?view=side&anim=walk` (views:
+`side|front|top|three`, animations: `idle|walk|roar`, optional `&species=trex`).
+
+## Project docs
+
+- **[CLAUDE.md](CLAUDE.md)**: architecture, rules, art pipeline, monetisation principles, milestones.
+- **[LICENSES/THIRD_PARTY_ASSETS.md](LICENSES/THIRD_PARTY_ASSETS.md)**: third-party code and fonts.
 
 ## License
 
-Proprietary — © Iliger Games. Third-party asset licenses are tracked in
-[LICENSES/THIRD_PARTY_ASSETS.md](LICENSES/THIRD_PARTY_ASSETS.md).
+Proprietary — © Iliger Games.

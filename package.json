@@ -1,0 +1,29 @@
+{
+  "name": "dino-park-tycoon",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Dino Park Tycoon \u2014 an idle park-management game by Iliger Games.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "balance": "BALANCE_REPORT=1 vitest run tests/balance.test.ts --silent=false",
+    "screenshot": "node scripts/screenshot.mjs",
+    "gallery": "node scripts/gallery-shot.mjs \"view=three&anim=idle\"",
+    "check:prod": "npm run build && node scripts/prod-check.mjs"
+  },
+  "dependencies": {
+    "@fontsource/fredoka": "^5.3.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "playwright-core": "^1.63.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}
