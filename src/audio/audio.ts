@@ -3,7 +3,7 @@
 
 type Voice =
   | 'coin' | 'upgrade' | 'unlock' | 'hatch' | 'roar' | 'click' | 'error' | 'reward' | 'milestone'
-  | 'munch' | 'squish' | 'tip' | 'squawk' | 'claim' | 'whoosh';
+  | 'munch' | 'squish' | 'tip' | 'squawk' | 'claim' | 'whoosh' | 'bite' | 'faint';
 
 export class AudioManager {
   private ctx: AudioContext | null = null;
@@ -136,6 +136,14 @@ export class AudioManager {
       case 'squawk':
         this.tone('sawtooth', 900, t, 0.12, 0.06, 1500);
         this.tone('sawtooth', 1300, t + 0.12, 0.18, 0.05, 700);
+        break;
+      case 'bite':
+        this.noiseBurst(t, 0.05, 2200, 0.25, 'bandpass');
+        this.tone('square', 180, t, 0.07, 0.06, 90);
+        break;
+      case 'faint':
+        this.tone('triangle', 660, t, 0.28, 0.1, 180);
+        this.noiseBurst(t + 0.2, 0.15, 400, 0.2, 'lowpass');
         break;
       case 'whoosh':
         this.noiseBurst(t, 0.4, 700, 0.25, 'bandpass');

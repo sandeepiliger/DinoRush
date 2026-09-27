@@ -16,6 +16,10 @@ import { Economy } from './economy/economy';
 import { claimQuest, questAt, questComplete, questReward, questValue, recordQuestEvent } from './economy/quests';
 import type { QuestDef, QuestKind } from './data/quests';
 import { Interactions } from './interactions/interactions';
+import { WILD, type StatId } from './data/wild';
+import { statCost, statMaxed, statValue, cargoCapacity } from './economy/hero';
+import { buildJungle } from './world/jungle';
+import { WildMode } from './wild/wildMode';
 import { AdManager, MockAdProvider } from './services/ads';
 import { analytics } from './services/analytics';
 import { haptics } from './services/haptics';
@@ -27,7 +31,7 @@ import { CameraRig } from './world/cameraRig';
 import { Effects } from './world/effects';
 import { ParkWorld } from './world/parkWorld';
 
-type SheetState = { kind: 'enclosure'; id: string } | { kind: 'entrance' } | null;
+type SheetState = { kind: 'enclosure'; id: string } | { kind: 'entrance' } | { kind: 'lab' } | null;
 
 interface Label {
   root: HTMLElement;
@@ -73,6 +77,10 @@ export class Game {
   private hiddenAt = 0;
   private interactions!: Interactions;
   private questEl!: HTMLElement;
+  private wild!: WildMode;
+  private follow = { x: WILD.heroStart.x, z: WILD.heroStart.z };
+  private hudMeat!: HTMLElement;
+  private hudPack!: HTMLElement;
 
   async start(): Promise<void> {
     const now = Date.now();
@@ -87,6 +95,7 @@ export class Game {
 
     this.initRenderer();
     this.world = new ParkWorld(this.economy.park);
+    const colliders = buildJungle(this.world.scene, WILD, mulberry32(4242));
     this.world.scene.add(this.effects.group);
     this.sim = new ParkSim(this.economy, 48, now & 0xffff);
     this.crowd = new VisitorCrowd(48);
@@ -96,9 +105,13 @@ export class Game {
     for (let i = 0; i < 600; i++) this.sim.update(0.05, this.data.park, now, () => {});
     this.data.park.totalVisitors = visitorsBefore;
 
-    this.cam = new CameraRig(this.renderer.domElement, { minX: -7, maxX: 7, minZ: -13, maxZ: 10, minDist: 14, maxDist: 46 });
-    this.cam.target.set(0, 1.5);
-    this.cam.distance = 34;
+    const B = WILD.bounds;
+    this.cam = new CameraRig(this.renderer.domElement, { minX: B.minX + 4, maxX: B.maxX - 4, minZ: B.minZ + 2, maxZ: B.maxZ - 4, minDist: 12, maxDist: 40 });
+    this.cam.target.set(WILD.heroStart.x, WILD.heroStart.z - 2);
+    this.cam.distance = 26;
+    // Dragging steers the hero; the camera follows it.
+    this.cam.panEnabled = false;
+    this.cam.follow = this.follow;
     this.cam.onTap = (x, y) => this.onWorldTap(x, y);
 
     for (const def of this.economy.park.enclosures) {
@@ -124,6 +137,26 @@ export class Game {
       income: () => this.liveIncome(Date.now()),
       reward: (amount, x, y) => this.reward(amount, x, y),
       questEvent: (kind) => this.questEvent(kind),
+    });
+    this.wild = new WildMode({
+      scene: this.world.scene,
+      camera: this.cam.camera,
+      effects: this.effects,
+      audio: this.audio,
+      canvas: this.renderer.domElement,
+      layer: $('labels'),
+      app: $('app'),
+      enclosures: this.economy.park.enclosures,
+      colliders,
+      hero: () => this.data.hero,
+      income: () => this.liveIncome(Date.now()),
+      earn: (amount) => this.economy.earn(this.data.park, amount),
+      showGain: (amount, x, y) => this.reward(amount, x, y, true),
+      questEvent: (kind) => this.questEvent(kind),
+      openLab: () => this.openSheet({ kind: 'lab' }),
+      closeLab: () => this.sheet?.kind === 'lab' && this.closeSheet(),
+      toast: (html) => this.toast(html),
+      persist: () => this.persist(),
     });
     this.buildQuestBar();
     this.onResize();
@@ -201,10 +234,14 @@ export class Game {
 
     this.sim.update(dt, state, now, (e) => this.onPay(e), this.interactions.ticketMultiplier);
     this.interactions.update(dt);
+    this.wild.update(dt);
+    this.follow.x = this.wild.heroX;
+    this.follow.z = this.wild.heroZ;
     for (const herd of this.herds.values()) for (const d of herd) d.update(dt, herd);
     this.crowd.update(this.sim.visitors);
     this.effects.update(dt);
     this.cam.update(dt);
+    this.world.followShadows(this.cam.target.x, this.cam.target.y);
     this.updateLabelPositions();
     this.updateTutorial();
 
@@ -215,6 +252,8 @@ export class Game {
       this.sheetRefresh?.();
       this.updateBoost(now);
       this.refreshQuest();
+      this.refreshHeroHud();
+      this.updateGuide();
     }
     this.updateCoins(dt);
 
@@ -305,6 +344,10 @@ export class Game {
       <div class="hud-money">
         <div class="pill pill-coins" id="hud-coins">${icons.coin}<span>0</span></div>
         <div class="pill pill-income" id="hud-income"></div>
+        <div class="hud-hero">
+          <div class="pill pill-small" id="hud-meat">${icons.meat}<span></span></div>
+          <div class="pill pill-small" id="hud-pack">${icons.paw}<span></span></div>
+        </div>
       </div>
       <div class="hud-spacer"></div>
       <div class="hud-btns">
@@ -313,6 +356,8 @@ export class Game {
       </div>`;
     this.hudCoins = $('hud-coins');
     this.hudIncome = $('hud-income');
+    this.hudMeat = $('hud-meat');
+    this.hudPack = $('hud-pack');
     this.boostBtn = $('hud-boost');
     $('hud-settings').addEventListener('click', () => this.openSettings());
     this.boostBtn.addEventListener('click', () => this.onBoost());
@@ -487,10 +532,15 @@ export class Game {
     close.addEventListener('click', () => this.closeSheet());
     card.appendChild(close);
     if (s.kind === 'enclosure') this.buildEnclosureSheet(card, s.id);
+    else if (s.kind === 'lab') this.buildLabSheet(card);
     else this.buildEntranceSheet(card);
     sheet.classList.add('open');
     this.questEl?.classList.add('hidden');
-    if (s.kind === 'enclosure') {
+    // The lab opens where the hero stands; park panels move the camera to what they describe.
+    this.cam.followPaused = s.kind !== 'lab';
+    if (s.kind === 'lab') {
+      // Stay with the hero.
+    } else if (s.kind === 'enclosure') {
       const def = this.economy.enclosure(s.id);
       // Keep the enclosure visible above the sheet.
       this.cam.focus(def.x * 0.6, def.z + 5, 26);
@@ -504,6 +554,7 @@ export class Game {
     this.sheetRefresh = null;
     $('sheet').classList.remove('open');
     this.questEl?.classList.remove('hidden');
+    this.cam.followPaused = false;
   }
 
   private buildEnclosureSheet(card: HTMLElement, id: string) {
@@ -751,7 +802,7 @@ export class Game {
     let target: DOMRect | null = null;
     if (this.sheet?.kind === 'enclosure' && this.sheet.id === this.economy.park.enclosures[0].id) {
       target = ($('sheet').querySelector('.actions .btn') as HTMLElement | null)?.getBoundingClientRect() ?? null;
-    } else if (!this.sheet) {
+    } else if (!this.sheet && !this.labels[0].root.classList.contains('far')) {
       target = this.labels[0].root.getBoundingClientRect();
     }
     const visible = !!target && target.width > 0;
@@ -782,8 +833,8 @@ export class Game {
   }
 
   /** Grants coins immediately and plays the feedback: floating "+X" and coins flying to the counter. */
-  private reward(amount: number, x: number, y: number) {
-    this.economy.earn(this.data.park, amount);
+  private reward(amount: number, x: number, y: number, alreadyEarned = false) {
+    if (!alreadyEarned) this.economy.earn(this.data.park, amount);
     const text = el('div', 'float-text', `+${formatNumber(amount)}`);
     text.style.left = `${x}px`;
     text.style.top = `${y}px`;
@@ -841,14 +892,19 @@ export class Game {
       case 'tip': return t('questTip', { n: q.target });
       case 'gift': return t(q.target === 1 ? 'questGift' : 'questGifts', { n: q.target });
       case 'roar': return t('questRoar', { n: q.target });
+      case 'hunt': return t('questHunt', { n: q.target });
+      case 'sell': return t('questSell', { n: q.target });
+      case 'build': return t('questBuild');
+      case 'hatchWild': return t('questHatchWild');
+      case 'upgradeStat': return t('questUpgradeStat');
     }
   }
 
   private refreshQuest() {
     if (!this.questEl) return;
     const q = questAt(this.data.quest.index);
-    const value = Math.min(q.target, questValue(q, this.data.quest, this.data.park));
-    const done = questComplete(q, this.data.quest, this.data.park);
+    const value = Math.min(q.target, questValue(q, this.data.quest, this.data.park, this.data.hero));
+    const done = questComplete(q, this.data.quest, this.data.park, this.data.hero);
     const title = done ? t('questDone') : this.questText(q);
     const sub = done ? this.questText(q) : q.kind === 'unlock' ? '' : `${value} / ${q.target}`;
     const reward = formatNumber(questReward(q, this.liveIncome(Date.now())));
@@ -864,9 +920,9 @@ export class Game {
 
   private onQuestTap() {
     const q = questAt(this.data.quest.index);
-    if (questComplete(q, this.data.quest, this.data.park)) {
+    if (questComplete(q, this.data.quest, this.data.park, this.data.hero)) {
       const r = this.questEl.getBoundingClientRect();
-      const amount = claimQuest(this.data.quest, this.data.park, this.liveIncome(Date.now()));
+      const amount = claimQuest(this.data.quest, this.data.park, this.liveIncome(Date.now()), this.data.hero);
       this.audio.play('claim');
       haptics.tap(30);
       this.effects.confetti(this.cam.target.x, 3, this.cam.target.y, 60, 0.9);
@@ -887,14 +943,16 @@ export class Game {
       case 'entrance':
         this.openSheet({ kind: 'entrance' });
         break;
-      case 'feed': {
-        const id = this.interactions.hungryEnclosure();
-        if (id) {
-          const d = this.economy.enclosure(id);
-          this.cam.focus(d.x * 0.6, d.z + 5, 24);
-        } else this.toast(t('hintFeed'));
+      case 'feed':
+        if (!this.interactions.hungryEnclosure()) this.toast(t('hintFeed'));
         break;
-      }
+      case 'hunt':
+      case 'sell':
+      case 'build':
+      case 'hatchWild':
+      case 'upgradeStat':
+        this.toast(t('hintHunt'));
+        break;
       case 'clean':
         this.toast(t('hintClean'));
         break;
@@ -908,6 +966,111 @@ export class Game {
         this.toast(t('hintRoar'));
         break;
     }
+  }
+
+  /** Points the ground arrow at wherever the current quest wants the hero to go. */
+  private updateGuide() {
+    const q = questAt(this.data.quest.index);
+    const h = this.data.hero;
+    if (questComplete(q, this.data.quest, this.data.park, h)) return this.wild.setGuide(null);
+    const hasMeat = h.meat > 0;
+    let target: THREE.Vector3 | null = null;
+    switch (q.kind) {
+      case 'hunt':
+        target = this.wild.nearestPrey();
+        break;
+      case 'sell':
+        target = hasMeat ? this.wild.padPosition('market') : this.wild.nearestPrey();
+        break;
+      case 'build':
+        target = hasMeat ? this.wild.padPosition('nest') : this.wild.nearestPrey();
+        break;
+      case 'hatchWild':
+        target = this.wild.padPosition('nest');
+        break;
+      case 'upgradeStat':
+        target = this.wild.padPosition('lab');
+        break;
+      case 'feed': {
+        const id = this.interactions.hungryEnclosure();
+        if (id) {
+          const d = this.economy.enclosure(id);
+          target = new THREE.Vector3(d.x, 0, d.z);
+        }
+        break;
+      }
+      default:
+        target = null;
+    }
+    this.wild.setGuide(target);
+  }
+
+  private refreshHeroHud() {
+    const h = this.data.hero;
+    this.hudMeat.querySelector('span')!.textContent = this.wild.cargoText();
+    this.hudMeat.classList.toggle('full', h.meat >= cargoCapacity(h, WILD));
+    this.hudPack.querySelector('span')!.textContent = this.wild.packText();
+  }
+
+  private buildLabSheet(card: HTMLElement) {
+    const h = this.data.hero;
+    card.insertAdjacentHTML('beforeend', `
+      <div class="sheet-head">
+        <div class="portrait" style="font-size:40px">${icons.dna}</div>
+        <div><div class="sheet-title">${t('labTitle')}</div><div class="sheet-sub">${t('labSub')}</div></div>
+      </div>`);
+    const rows = el('div', 'lab-rows');
+    card.appendChild(rows);
+    const defs: { id: StatId; icon: string; name: string; desc: string; fmt: (v: number) => string }[] = [
+      { id: 'cargo', icon: icons.bag, name: t('statCargo'), desc: t('statCargoSub'), fmt: (v) => `${Math.floor(v)}` },
+      { id: 'pack', icon: icons.paw, name: t('statPack'), desc: t('statPackSub'), fmt: (v) => `${Math.floor(v)}` },
+      { id: 'bite', icon: icons.tooth, name: t('statBite'), desc: t('statBiteSub'), fmt: (v) => v.toFixed(1) },
+      { id: 'speed', icon: icons.speed, name: t('statSpeed'), desc: t('statSpeedSub'), fmt: (v) => `${v.toFixed(1)} m/s` },
+    ];
+    const refreshers: (() => void)[] = [];
+    for (const d of defs) {
+      const row = el('div', 'lab-row');
+      row.innerHTML = `<div class="lab-ico">${d.icon}</div><div class="lab-info"><div class="lab-name">${d.name}</div><div class="lab-desc">${d.desc}</div><div class="lab-val"></div></div>`;
+      const btn = el('button', 'btn');
+      row.appendChild(btn);
+      rows.appendChild(row);
+      const val = row.querySelector('.lab-val') as HTMLElement;
+      const refresh = () => {
+        const now = statValue(h, d.id, WILD);
+        if (statMaxed(h, d.id, WILD)) {
+          val.textContent = d.fmt(now);
+          btn.className = 'btn maxed';
+          btn.innerHTML = `<span class="btn-price">${icons.star} ${t('maxed')}</span>`;
+          return;
+        }
+        const next = now + WILD.stats[d.id].perLevel;
+        val.textContent = `${d.fmt(now)} → ${d.fmt(next)}`;
+        const cost = statCost(h, d.id, WILD);
+        btn.className = `btn ${this.data.park.coins >= cost ? '' : 'off'}`;
+        btn.innerHTML = `<span class="btn-price">${icons.coin} ${formatNumber(cost)}</span>`;
+      };
+      holdToRepeat(btn, () => {
+        if (statMaxed(h, d.id, WILD)) return false;
+        const cost = statCost(h, d.id, WILD);
+        if (this.data.park.coins < cost) {
+          this.fail(t('notEnough'));
+          return false;
+        }
+        this.data.park.coins -= cost;
+        h.stats[d.id]++;
+        this.audio.play('upgrade');
+        haptics.tap();
+        this.effects.confetti(this.wild.heroX, 2, this.wild.heroZ, 20, 0.6);
+        this.questEvent('upgradeStat');
+        refresh();
+        this.persist();
+        return true;
+      });
+      refreshers.push(refresh);
+    }
+    const refreshAll = () => refreshers.forEach((f) => f());
+    refreshAll();
+    this.sheetRefresh = refreshAll;
   }
 
   // ---------------------------------------------------------------- settings / modal / toasts

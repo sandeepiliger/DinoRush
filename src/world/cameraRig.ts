@@ -24,6 +24,12 @@ export class CameraRig {
   private focusGoal: { x: number; z: number; d: number } | null = null;
   private shake = 0;
   onTap: (clientX: number, clientY: number) => void = () => {};
+  /** When set (and not paused), the camera smoothly tracks this ground point — the hero. */
+  follow: { x: number; z: number } | null = null;
+  /** Temporarily stop following (e.g. while an enclosure panel is open and the camera shows it). */
+  followPaused = false;
+  /** One-finger drag pans the map; disabled when the drag steers the hero instead. */
+  panEnabled = true;
 
   constructor(
     private el: HTMLElement,
@@ -62,6 +68,11 @@ export class CameraRig {
       this.target.y += (this.focusGoal.z - this.target.y) * k;
       this.distance += (this.focusGoal.d - this.distance) * k;
       if (Math.abs(this.focusGoal.x - this.target.x) + Math.abs(this.focusGoal.z - this.target.y) < 0.02) this.focusGoal = null;
+    } else if (this.follow && !this.followPaused) {
+      // Look slightly ahead of the hero (north) so more of what's coming is visible.
+      const k = 1 - Math.exp(-dt * 6);
+      this.target.x += (this.follow.x - this.target.x) * k;
+      this.target.y += (this.follow.z - 2 - this.target.y) * k;
     } else if (!this.dragging) {
       this.target.addScaledVector(this.vel, dt);
       this.vel.multiplyScalar(Math.exp(-dt * 5));
@@ -121,7 +132,7 @@ export class CameraRig {
       return;
     }
     if (!this.dragging && Math.hypot(e.clientX - p.sx, e.clientY - p.sy) > 8) this.dragging = true;
-    if (this.dragging) {
+    if (this.dragging && this.panEnabled) {
       const u = this.unitsPerPixel();
       // Screen-up drag moves the view "into" the park, like dragging a map.
       const mx = -dx * u;

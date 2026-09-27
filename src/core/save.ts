@@ -3,8 +3,12 @@
 import type { ParkState } from '../economy/economy';
 import type { Economy } from '../economy/economy';
 import type { QuestProgress } from '../economy/quests';
+import { WILD, type StatId } from '../data/wild';
+import { WILD_QUESTS_INSERTED, WILD_QUESTS_INSERTED_AT } from '../data/quests';
+import { freshHero, type HeroState } from '../economy/hero';
 
-export const SAVE_VERSION = 1;
+// v1: park, settings, quests.  v2: adds the hero (wild zone) and inserts the wild quests into the quest line.
+export const SAVE_VERSION = 2;
 const SAVE_KEY = 'dpt.save';
 const BACKUP_KEY = 'dpt.save.bak';
 
@@ -21,6 +25,7 @@ export interface SaveData {
   removeAds: boolean;
   tutorialDone: boolean;
   quest: QuestProgress;
+  hero: HeroState;
 }
 
 /** Minimal storage surface so tests can run without a browser. */
@@ -64,6 +69,7 @@ export class SaveManager {
       removeAds: false,
       tutorialDone: false,
       quest: { index: 0, count: 0 },
+      hero: freshHero(WILD),
     };
   }
 
@@ -142,6 +148,20 @@ export class SaveManager {
     // `quest` was added after v1 shipped to testers; it is optional and defaults to the start.
     const q = (o.quest ?? {}) as Record<string, unknown>;
     const quest = { index: int(q.index, 0, 0, 1_000_000), count: int(q.count, 0, 0, 1_000_000) };
+    // v1 -> v2: the wild quests were inserted mid-line; keep v1 players on the quest they were doing.
+    if (o.saveVersion < 2 && quest.index >= WILD_QUESTS_INSERTED_AT) quest.index += WILD_QUESTS_INSERTED;
+
+    const hero = freshHero(WILD);
+    const hs = (o.hero ?? {}) as Record<string, unknown>;
+    const st = (hs.stats ?? {}) as Record<string, unknown>;
+    for (const id of Object.keys(hero.stats) as StatId[]) hero.stats[id] = int(st[id], 0, 0, WILD.stats[id].maxLevel);
+    hero.meat = int(hs.meat, 0, 0, 10_000);
+    hero.pack = int(hs.pack, 0, 0, WILD.stats.pack.base + WILD.stats.pack.perLevel * WILD.stats.pack.maxLevel);
+    hero.eggReady = hs.eggReady === true;
+    const padIds = new Set(WILD.pads.map((p) => p.id));
+    if (Array.isArray(hs.built)) for (const id of hs.built) if (typeof id === 'string' && padIds.has(id) && !hero.built.includes(id)) hero.built.push(id);
+    const prog = (hs.padProgress ?? {}) as Record<string, unknown>;
+    for (const pad of WILD.pads) if (!hero.built.includes(pad.id) && isNum(prog[pad.id])) hero.padProgress[pad.id] = int(prog[pad.id], 0, 0, pad.buildMeat);
 
     return {
       saveVersion: SAVE_VERSION,
@@ -150,6 +170,7 @@ export class SaveManager {
       removeAds: o.removeAds === true,
       tutorialDone: o.tutorialDone === true,
       quest,
+      hero,
     };
   }
 }

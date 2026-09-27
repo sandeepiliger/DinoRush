@@ -13,6 +13,7 @@ export interface Bounds {
 type Mode = 'hatching' | 'idle' | 'walk' | 'roar' | 'eat';
 
 const TAU = Math.PI * 2;
+const BITE_SECONDS = 0.32;
 
 export class DinoAnimator {
   x: number;
@@ -34,6 +35,8 @@ export class DinoAnimator {
   /** Walking towards food: on arrival switch to the eating pose instead of idling. */
   private goingToEat = false;
   private eatT = 0;
+  /** >0 while a bite attack plays (seconds remaining). */
+  private biteT = 0;
 
   constructor(
     readonly rig: DinoRig,
@@ -70,6 +73,45 @@ export class DinoAnimator {
     this.targetZ = THREE.MathUtils.clamp(z, b.minZ, b.maxZ);
     this.goingToEat = true;
     this.mode = 'walk';
+  }
+
+  /** Quick lunge-and-snap attack; purely visual, damage is decided by the caller. */
+  bite(): void {
+    if (this.mode === 'hatching') return;
+    this.biteT = BITE_SECONDS;
+  }
+
+  /**
+   * External locomotion for player-driven and AI-driven dinos (hero, pack, wild prey): the caller owns
+   * position and heading, this keeps the gait locked to the distance actually moved.
+   */
+  drive(dt: number, x: number, z: number, heading: number): void {
+    this.time += dt;
+    const sp = this.rig.species;
+    if (this.mode === 'hatching') {
+      this.hatchT += dt;
+      const t = Math.min(1, this.hatchT / 0.9);
+      const s = t >= 1 ? 1 : 1 - Math.pow(2, -9 * t) * Math.cos(t * 10);
+      this.rig.root.scale.setScalar(sp.scale * Math.max(0.001, s));
+      if (this.hatchT > 1.0) {
+        this.rig.root.scale.setScalar(sp.scale);
+        this.mode = 'idle';
+        this.roar();
+      }
+    } else if (this.mode === 'roar') {
+      this.roarT += dt;
+      if (this.roarT > 1.6) this.mode = 'idle';
+    }
+    const moved = Math.hypot(x - this.x, z - this.z);
+    const speed = dt > 0 ? moved / dt / sp.scale : 0;
+    this.speedNow += (speed - this.speedNow) * Math.min(1, dt * 10);
+    this.lookTarget = THREE.MathUtils.clamp(wrapAngle(heading - this.heading) * 4, -0.6, 0.6);
+    this.x = x;
+    this.z = z;
+    this.heading = heading;
+    this.phase = (this.phase + (moved / (this.rig.stride * sp.scale)) * TAU) % TAU;
+    this.biteT = Math.max(0, this.biteT - dt);
+    this.apply(dt);
   }
 
   get isHatching(): boolean {
@@ -230,17 +272,21 @@ export class DinoAnimator {
     // Eating: head dips to the ground and bobs, jaw chomps.
     const eatK = this.mode === 'eat' ? Math.min(1, this.eatT * 3, (3.6 - this.eatT) * 3) : 0;
     const chomp = eatK * Math.max(0, Math.sin(this.eatT * 11));
+    // Bite: lunge the head forward-down and snap the jaw open then shut.
+    const biteK = this.biteT > 0 ? Math.sin((1 - this.biteT / BITE_SECONDS) * Math.PI) : 0;
     const neckCount = rig.bones.length - 1 - rig.hipBone;
     for (let i = rig.hipBone + 1, k = 0; i < rig.bones.length; i++, k++) {
       const bone = rig.bones[i];
       bone.rotation.y = (this.lookYaw / neckCount) * 0.8;
       bone.rotation.z =
         Math.sin(t * 1.7 + k * 0.4) * 0.025 + Math.cos(this.phase * 2) * 0.03 * wb + roarK * 0.12 -
-        eatK * (0.3 + Math.sin(this.eatT * 5.5) * 0.06);
+        eatK * (0.3 + Math.sin(this.eatT * 5.5) * 0.06) -
+        biteK * 0.22;
     }
     rig.headPivot.rotation.y = this.lookYaw * 0.3;
-    rig.jaw.rotation.z = -roarK * 0.65 - chomp * 0.3 - (Math.sin(t * 0.9) > 0.97 ? 0.08 : 0);
-    rig.body.rotation.z += roarK * 0.1 - eatK * 0.08;
+    rig.jaw.rotation.z = -roarK * 0.65 - chomp * 0.3 - biteK * 0.75 - (Math.sin(t * 0.9) > 0.97 ? 0.08 : 0);
+    rig.body.rotation.z += roarK * 0.1 - eatK * 0.08 - biteK * 0.12;
+    rig.body.position.x = biteK * 0.18;
 
     for (let i = 0; i < rig.arms.length; i++) {
       rig.arms[i].rotation.z = -0.6 + Math.sin(this.phase + i * Math.PI) * 0.25 * wb + roarK * 0.4;

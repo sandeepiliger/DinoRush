@@ -202,3 +202,35 @@ button { font-family: inherit; }
 @keyframes float-up { 0% { opacity: 0; margin-top: 10px; scale: .6; } 15% { opacity: 1; scale: 1.15; } 30% { scale: 1; } 100% { opacity: 0; margin-top: -60px; } }
 .bubble[hidden], [hidden] { display: none !important; }
 @keyframes pulse-scale { 0%, 100% { scale: 1; } 50% { scale: 1.1; } }
+
+/* ---------- Joystick ---------- */
+.joy-base { position: absolute; left: 0; top: 0; width: 112px; height: 112px; border-radius: 50%; z-index: 8; pointer-events: none;
+  background: radial-gradient(circle, rgba(255,255,255,.18), rgba(255,255,255,.08)); border: 3px solid rgba(255,255,255,.55); box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+.joy-knob { position: absolute; left: 30px; top: 30px; width: 46px; height: 46px; border-radius: 50%; background: #fffaf0; box-shadow: 0 3px 0 var(--panel-edge), 0 4px 10px rgba(0,0,0,.25); }
+
+/* ---------- Build pad labels ---------- */
+.pad-label { position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; display: flex; align-items: center; gap: 6px; will-change: transform;
+  background: rgba(40,28,16,.78); color: #fff; border-radius: 14px; padding: 4px 12px 4px 6px; white-space: nowrap; box-shadow: 0 3px 0 rgba(0,0,0,.2); }
+.pad-label .pad-icon { font-size: 24px; display: grid; }
+.pad-label .pad-title { font-weight: 700; font-size: 14px; line-height: 1.1; }
+.pad-label .pad-sub { font-size: 11px; font-weight: 600; opacity: .9; display: flex; align-items: center; gap: 3px; }
+.pad-label .pad-sub .ico { font-size: 13px; }
+.pad-nest { background: rgba(47,110,40,.85); }
+.pad-lab { background: rgba(20,90,95,.85); }
+.pad-market { background: rgba(150,95,10,.85); }
+
+/* ---------- Hero HUD ---------- */
+.hud-hero { display: flex; gap: 6px; margin-top: 2px; }
+.pill-small { font-size: 13px; padding: 3px 10px 3px 5px; background: rgba(40,28,16,.62); }
+.pill-small .ico { font-size: 18px; }
+.pill-small.full { background: rgba(200,60,50,.85); }
+
+/* ---------- Lab sheet rows ---------- */
+.lab-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.lab-row { display: flex; align-items: center; gap: 10px; background: #f4ead8; border-radius: 16px; padding: 8px 8px 8px 10px; }
+.lab-row .lab-ico { font-size: 30px; width: 40px; display: grid; place-items: center; flex: none; }
+.lab-row .lab-info { flex: 1; min-width: 0; }
+.lab-row .lab-name { font-weight: 700; font-size: 16px; }
+.lab-row .lab-desc { font-size: 12px; color: var(--ink-soft); font-weight: 500; }
+.lab-row .lab-val { font-size: 13px; font-weight: 700; color: var(--green-dark); }
+.lab-row .btn { flex: none; min-width: 108px; padding: 6px 10px 8px; font-size: 15px; }

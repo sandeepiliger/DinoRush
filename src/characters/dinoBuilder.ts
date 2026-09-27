@@ -111,7 +111,6 @@ export function buildDino(species: SpeciesDef, variant = 0.5): DinoRig {
   geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinWeight, 4));
   const bodyMesh = new THREE.SkinnedMesh(geo, skin);
   bodyMesh.castShadow = true;
-  bodyMesh.frustumCulled = false; // skinned bounds are unreliable; dinos are few
 
   // One bone per knot. The hip knot is the root; chains run from it to the tail tip and to the neck.
   const bones = knots.map(() => new THREE.Bone());
@@ -128,6 +127,9 @@ export function buildDino(species: SpeciesDef, variant = 0.5): DinoRig {
   bodyMesh.add(bones[hip]);
   bodyMesh.updateMatrixWorld(true);
   bodyMesh.bind(new THREE.Skeleton(bones));
+  // Cull off-screen bodies: bind-pose bounds, padded for tail swing and neck bend.
+  bodyMesh.computeBoundingSphere();
+  if (bodyMesh.boundingSphere) bodyMesh.boundingSphere.radius *= 1.5;
   body.add(bodyMesh);
 
   // ---------- Head ----------

@@ -36,6 +36,20 @@ tuned in `INTERACTION` in `src/data/parks.ts`):
 - **Quests:** a bottom quest bar (`src/data/quests.ts`) teaches each mechanic in order, then repeats forever.
   Tapping an unfinished quest shows the player where to go.
 
+## 2c. Wild loop (drive your hero — idle-arcade style)
+
+The player steers a hero raptor (drag anywhere = floating joystick; WASD on desktop); the camera follows it.
+- **Hunt:** wild prey (Compsognathus, Protoceratops) roam the jungle north of the park and flee. The hero
+  and pack auto-bite anything in range. Kills spill meat that magnets onto the hero's back as a visible stack
+  (capacity = Cargo stat).
+- **Build pads:** stand on a ring and cargo flies into it. Meat Market (meat → coins, scaled to park income),
+  Nest (costs meat to build, then lays an egg every ~40 s; step in to hatch a pack raptor), DNA Lab
+  (upgrade Cargo, Pack size, Bite, Speed with coins).
+- **Pack:** hatched raptors follow in formation and hunt with you.
+- **Guide arrow:** a ground arrow points to wherever the current quest needs the hero.
+- Rules: `src/economy/hero.ts` (pure, tested); tuning: `src/data/wild.ts`; runtime: `src/wild/`.
+- Save v2 adds `hero`; v1 saves migrate (quest index shifted past the inserted wild quests).
+
 ## 3. Architecture
 
 ```
@@ -48,6 +62,7 @@ src/
   world/       Park scenery, props, camera, effects (coins, confetti, eggs)
   audio/       Web Audio synthesiser: all SFX + background music generated at runtime
   ui/          DOM UI: styles, SVG icons, localisable strings, helpers
+  wild/        Hero control (joystick), pack, prey AI, meat stack, build pads (market / nest / lab)
   interactions/ Hands-on loop: feeding, poop cleanup, visitor tips, pterodactyl gifts (rules in economy/care.ts)
   services/    Ads, analytics, haptics — abstractions with swappable providers
   debug/       Dev-only character gallery (gallery.html, not part of the production build)
@@ -111,10 +126,13 @@ when `SAVE_VERSION` increases.
    hatching, entrance, offline earnings, 2× boost (mock ad), save/load, audio, tutorial hint, settings.
 2. **Juice & retention:** ✅ feeding, cleanup, visitor tips, pterodactyl gifts, quest line.
    Next: daily reward, park rating stars, better unlock cinematic, haptics tuning.
-3. **World map:** city map screen, second city (Dubai) with its own theme and species, prestige/city transfer.
-4. **Monetisation:** AdMob via Capacitor plugin (test IDs), Remove Ads + 2× income IAP via Play Billing,
+3. **Wild loop:** ✅ hero driving, hunting, meat stack, market / nest / lab pads, pack, guide arrow.
+   Next: HP + dangerous predators and a boss, more build pads (amber farm, hunter bot, feeding station that
+   supplies the park), dino evolution, collection book.
+4. **World map / islands:** ship to the next island (city), new species and prey per island, prestige.
+5. **Monetisation:** AdMob via Capacitor plugin (test IDs), Remove Ads + 2× income IAP via Play Billing,
    analytics provider (e.g. Firebase), remote config for balancing.
-5. **Android release:** Capacitor project, icons/splash, AAB, signing config (never committed), Play Console
+6. **Android release:** Capacitor project, icons/splash, AAB, signing config (never committed), Play Console
    internal → closed testing (12 testers × 14 days for new personal accounts), store listing.
 
 ## 9. Validation before calling anything done
@@ -125,7 +143,7 @@ npm run typecheck
 npm test               # economy, balance pacing, save/load, visitor simulation
 npm run build
 npm run check:prod     # loads the production bundle headless; fails on any page error
-npm run screenshot     # basic | rich | flow | interact — then LOOK at screenshots/*.png
+npm run screenshot     # basic | rich | flow | interact | wild — then LOOK at screenshots/*.png
 ```
 
 ## 10. Operating rules for Claude Code

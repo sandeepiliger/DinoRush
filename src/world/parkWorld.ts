@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import type { EnclosureDef, ParkDef } from '../data/parks';
 import { mulberry32 } from '../sim/parkSim';
 import { ROUTE_POINTS } from '../sim/parkSim';
+import { WILD } from '../data/wild';
 import { at, instanced, merge, paint, vertexColorMat } from './geometry';
 import { benchGeometry, bushGeometry, fencePostGeometry, lampGeometry, palmGeometry, rockGeometry, roundTreeGeometry } from './props';
 
@@ -41,7 +42,7 @@ export class ParkWorld {
     const scene = this.scene;
     const skyTop = new THREE.Color(0x8fd3ff);
     scene.background = skyTop;
-    scene.fog = new THREE.Fog(0xbfe6ff, 55, 110);
+    scene.fog = new THREE.Fog(0xbfe6ff, 60, 130);
 
     const hemi = new THREE.HemisphereLight(0xdff3ff, 0x6b8f4a, 1.35);
     scene.add(hemi);
@@ -70,9 +71,14 @@ export class ParkWorld {
   }
 
   private buildGround(rng: () => number) {
-    const size = 120;
-    const geo = new THREE.PlaneGeometry(size, size, 60, 60);
+    // Big enough for the park (south) and the wild jungle (north); hills rise outside the playable area.
+    const size = 200;
+    const geo = new THREE.PlaneGeometry(size, size, 100, 100);
     geo.rotateX(-Math.PI / 2);
+    geo.translate(0, 0, -20);
+    const B = WILD.bounds;
+    const jungleDark = new THREE.Color(0x3f8a36);
+    const mud = new THREE.Color(0x8a7a4a);
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
     const a = new THREE.Color(0x7cc257);
@@ -83,10 +89,19 @@ export class ParkWorld {
       const z = pos.getZ(i);
       const n = Math.sin(x * 0.35) * Math.cos(z * 0.3) * 0.5 + 0.5;
       c.copy(a).lerp(b, n * 0.7 + rng() * 0.3);
+      // The jungle is darker and patchier, with muddy clearings.
+      const jungleK = THREE.MathUtils.smoothstep(-z, 19, 26);
+      if (jungleK > 0) {
+        c.lerp(jungleDark, jungleK * 0.75);
+        const patch = Math.sin(x * 0.21 + 1.3) * Math.cos(z * 0.17) ;
+        if (patch > 0.55) c.lerp(mud, jungleK * (patch - 0.55) * 1.6);
+      }
       colors.set([c.r, c.g, c.b], i * 3);
-      // Rolling hills far away, perfectly flat inside the park.
-      const r = Math.hypot(x, z * 0.8);
-      if (r > 30) pos.setY(i, Math.pow((r - 30) / 30, 2) * 6 * (0.6 + n * 0.8));
+      // Perfectly flat where you can walk; rolling hills rise beyond the playable edge.
+      const dx = Math.max(B.minX - x, 0, x - B.maxX);
+      const dz = Math.max(B.minZ - z, 0, z - B.maxZ);
+      const d = Math.hypot(dx, dz);
+      if (d > 0) pos.setY(i, Math.pow(d / 18, 1.6) * 7 * (0.6 + n * 0.8));
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
@@ -180,18 +195,16 @@ export class ParkWorld {
     const box = new THREE.BoxGeometry(1, 1, 1);
     box.translate(0, 0.5, 0);
     const transforms: { x: number; z: number; w: number; d: number; h: number; c: number }[] = [];
-    const ring = (count: number, radius: number, hMin: number, hMax: number) => {
-      for (let i = 0; i < count; i++) {
-        const a = (i / count) * Math.PI * 2 + rng() * 0.1;
-        const r = radius + rng() * 6;
-        const x = Math.cos(a) * r * 1.1;
-        const z = Math.sin(a) * r * 0.95 - 4;
-        if (z > 18) continue; // keep the view behind the camera clear
-        transforms.push({ x, z, w: 2 + rng() * 2.5, d: 2 + rng() * 2.5, h: hMin + rng() * (hMax - hMin), c: palette[Math.floor(rng() * palette.length)] });
+    // City blocks line the east and west edges of the park side; the north is wild jungle.
+    const B = WILD.bounds;
+    const add = (x: number, z: number, hMin: number, hMax: number) =>
+      transforms.push({ x, z, w: 2 + rng() * 2.5, d: 2 + rng() * 2.5, h: hMin + rng() * (hMax - hMin), c: palette[Math.floor(rng() * palette.length)] });
+    for (const side of [-1, 1]) {
+      for (let z = -16; z < B.maxZ + 6; z += 3.2) {
+        add(side * (B.maxX + 3 + rng() * 2), z + rng(), 4, 10);
+        add(side * (B.maxX + 9 + rng() * 3), z + rng() * 2, 8, 20);
       }
-    };
-    ring(46, 27, 3, 9);
-    ring(40, 36, 7, 18);
+    }
     const mat = new THREE.MeshStandardMaterial({ map: windowTex, roughness: 0.8 });
     const im = new THREE.InstancedMesh(box, mat, transforms.length);
     const m = new THREE.Matrix4();
@@ -212,6 +225,9 @@ export class ParkWorld {
     const trees: { x: number; z: number; ry: number; s: number }[] = [];
     const bushes: { x: number; z: number; ry: number; s: number }[] = [];
     const occupied = (x: number, z: number, pad: number) => {
+      // Keep the entrance forecourt (market, lab, the hero's usual route) free of tall trees.
+      if (Math.abs(x) < 13 && z > 11) return true;
+      for (const p of WILD.pads) if (Math.hypot(x - p.x, z - p.z) < 4.5) return true;
       if (Math.abs(x) < 2.6 && z > -11 && z < 16) return true; // avenue
       if (Math.hypot(x, z - 10.2) < 4.5) return true; // gate plaza
       for (const e of this.park.enclosures) {
@@ -355,6 +371,14 @@ export class ParkWorld {
     };
     view.setUnlocked(false);
     this.enclosures.set(def.id, view);
+  }
+
+  /** Keeps the shadow-casting sun centred on what the camera sees (snapped to avoid shimmering). */
+  followShadows(x: number, z: number) {
+    const sx = Math.round(x / 4) * 4;
+    const sz = Math.round(z / 4) * 4;
+    this.sun.position.set(sx + 14, 26, sz + 14);
+    this.sun.target.position.set(sx, 0, sz);
   }
 
   /** Walkable area for dinos inside an enclosure (in world coordinates). */

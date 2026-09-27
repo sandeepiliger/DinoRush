@@ -9,7 +9,12 @@ export interface QuestProgress {
   count: number;
 }
 
-const COUNTER_KINDS: ReadonlySet<QuestKind> = new Set(['feed', 'clean', 'tip', 'gift', 'roar']);
+const COUNTER_KINDS: ReadonlySet<QuestKind> = new Set(['feed', 'clean', 'tip', 'gift', 'roar', 'hunt', 'sell', 'hatchWild', 'upgradeStat']);
+
+/** Extra state some quests read (the hero's built pads). */
+export interface QuestContext {
+  built?: readonly string[];
+}
 
 export const isCounterQuest = (q: QuestDef) => COUNTER_KINDS.has(q.kind);
 
@@ -21,8 +26,10 @@ export function questAt(index: number, list = QUESTS, repeat = REPEATABLE): Ques
   return { ...base, target: Math.round(base.target * (1 + round * 0.5)) };
 }
 
-export function questValue(q: QuestDef, p: QuestProgress, s: ParkState): number {
+export function questValue(q: QuestDef, p: QuestProgress, s: ParkState, ctx: QuestContext = {}): number {
   switch (q.kind) {
+    case 'build':
+      return ctx.built?.includes(q.pad!) ? 1 : 0;
     case 'level':
       return s.enclosures[q.enclosure!]?.level ?? 0;
     case 'dinos':
@@ -36,8 +43,8 @@ export function questValue(q: QuestDef, p: QuestProgress, s: ParkState): number 
   }
 }
 
-export function questComplete(q: QuestDef, p: QuestProgress, s: ParkState): boolean {
-  return questValue(q, p, s) >= q.target;
+export function questComplete(q: QuestDef, p: QuestProgress, s: ParkState, ctx: QuestContext = {}): boolean {
+  return questValue(q, p, s, ctx) >= q.target;
 }
 
 /** Records a gameplay event; only counts if the current quest is waiting for that kind. */
@@ -54,9 +61,16 @@ export function questReward(q: QuestDef, incomePerSecond: number): number {
 }
 
 /** Claims the current quest if complete. Returns the coin reward, or 0 if not claimable. */
-export function claimQuest(p: QuestProgress, s: ParkState, incomePerSecond: number, list = QUESTS, repeat = REPEATABLE): number {
+export function claimQuest(
+  p: QuestProgress,
+  s: ParkState,
+  incomePerSecond: number,
+  ctx: QuestContext = {},
+  list = QUESTS,
+  repeat = REPEATABLE,
+): number {
   const q = questAt(p.index, list, repeat);
-  if (!questComplete(q, p, s)) return 0;
+  if (!questComplete(q, p, s, ctx)) return 0;
   p.index++;
   p.count = 0;
   return questReward(q, incomePerSecond);

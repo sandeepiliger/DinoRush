@@ -207,3 +207,75 @@ export const SPECIES: Record<string, SpeciesDef> = {
     scale: 1.05,
   },
 };
+
+/**
+ * Creatures that live outside the park: the player's hero, pack members, and wild prey.
+ * Kept separate from SPECIES so park UI (portraits, enclosures) only lists park animals.
+ */
+export const CREATURES: Record<string, SpeciesDef> = {
+  hero: {
+    ...SPECIES.raptor,
+    id: 'hero',
+    name: 'Rex Jr.',
+    rarity: 'legendary',
+    description: 'Your pack leader.',
+    head: { ...SPECIES.raptor.head, eye: 0.32 },
+    palette: { base: 0xe0a02c, belly: 0xfff1cf, accent: 0x9a4f14, stripes: 0.9, extra: 0x2fb6c9 },
+    walkSpeed: 3.2,
+    scale: 1.45,
+  },
+  packRaptor: {
+    ...SPECIES.raptor,
+    id: 'packRaptor',
+    name: 'Pack Raptor',
+    palette: { base: 0x3f8fb0, belly: 0xe6eef0, accent: 0x1f4f66, stripes: 0.8, extra: 0xf2a33a },
+    walkSpeed: 3.2,
+    scale: 1.1,
+  },
+  compy: {
+    id: 'compy',
+    name: 'Compsognathus',
+    rarity: 'common',
+    description: 'Tiny, fast and very nervous.',
+    spine: [
+      { x: -0.95, y: 0.55, rw: 0.04, rh: 0.04 },
+      { x: -0.6, y: 0.57, rw: 0.07, rh: 0.08 },
+      { x: -0.25, y: 0.6, rw: 0.14, rh: 0.16 },
+      { x: 0.05, y: 0.6, rw: 0.16, rh: 0.18 },
+      { x: 0.3, y: 0.7, rw: 0.1, rh: 0.1 },
+      { x: 0.45, y: 0.88, rw: 0.07, rh: 0.07 },
+    ],
+    hipKnot: 3,
+    hipHeight: 0.5,
+    gait: 'biped',
+    hindLegs: { x: 0.02, thickness: 0.08, thighAngle: 0.5, shinAngle: 0.45, spread: 0.1, foot: 1.1 },
+    arms: { x: 0.3, length: 0.18, thickness: 0.03 },
+    head: { size: 0.13, snout: 1.1, snoutHeight: 0.55, eye: 0.36, teeth: false },
+    palette: { base: 0x8fb04a, belly: 0xf1ecc9, accent: 0x55702a, stripes: 0.6, extra: 0xe8a33a },
+    walkSpeed: 2.2,
+    scale: 1.0,
+  },
+  protoceratops: {
+    id: 'protoceratops',
+    name: 'Protoceratops',
+    rarity: 'common',
+    description: 'A stubby little herbivore with a beak and a mini frill.',
+    spine: [
+      { x: -1.0, y: 0.5, rw: 0.04, rh: 0.04 },
+      { x: -0.65, y: 0.56, rw: 0.14, rh: 0.14 },
+      { x: -0.25, y: 0.64, rw: 0.3, rh: 0.3 },
+      { x: 0.15, y: 0.64, rw: 0.32, rh: 0.3 },
+      { x: 0.5, y: 0.6, rw: 0.2, rh: 0.2 },
+      { x: 0.68, y: 0.6, rw: 0.13, rh: 0.13 },
+    ],
+    hipKnot: 3,
+    hipHeight: 0.45,
+    gait: 'quad',
+    hindLegs: { x: -0.25, thickness: 0.12, thighAngle: 0.12, shinAngle: 0.08, spread: 0.2, foot: 0.8 },
+    frontLegs: { x: 0.4, thickness: 0.1, thighAngle: -0.05, shinAngle: 0.05, spread: 0.18, foot: 0.7 },
+    head: { size: 0.22, snout: 0.9, snoutHeight: 0.7, eye: 0.28, teeth: false, frill: true, beak: true },
+    palette: { base: 0xc79a5b, belly: 0xf3e6c4, accent: 0x8a6232, stripes: 0.4, extra: 0xd9674a },
+    walkSpeed: 1.6,
+    scale: 1.0,
+  },
+};

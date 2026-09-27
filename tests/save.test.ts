@@ -16,6 +16,8 @@ describe('SaveManager', () => {
     eco.unlock(data.park, eco.park.enclosures[1].id);
     data.settings.music = false;
     data.quest = { index: 4, count: 1 };
+    data.hero.meat = 3;
+    data.hero.stats.bite = 2;
     sm.save(data);
     const { data: loaded, recovered } = sm.load(2000);
     expect(recovered).toBe(false);
@@ -72,6 +74,27 @@ describe('SaveManager', () => {
     expect(v.settings.sfx).toBe(true);
     expect(v.removeAds).toBe(false);
     expect(v.quest).toEqual({ index: 0, count: 0 });
+  });
+
+  it('migrates v1 saves: adds a fresh hero and shifts quests past the inserted wild quests', () => {
+    const { sm, eco } = setup();
+    const v1 = { saveVersion: 1, park: { parkId: eco.park.id, coins: 10 }, quest: { index: 7, count: 2 } };
+    const v = sm.validate(v1, 0)!;
+    expect(v.saveVersion).toBe(SAVE_VERSION);
+    expect(v.quest.index).toBe(12);
+    expect(v.hero.meat).toBe(0);
+    const early = sm.validate({ ...v1, quest: { index: 2, count: 0 } }, 0)!;
+    expect(early.quest.index).toBe(2);
+  });
+
+  it('clamps tampered hero data', () => {
+    const { sm, eco } = setup();
+    const v = sm.validate({ saveVersion: 2, park: { parkId: eco.park.id }, hero: { meat: -3, stats: { cargo: 999 }, built: ['nest', 'hack'], pack: 1e9 } }, 0)!;
+    expect(v.hero.meat).toBe(0);
+    expect(v.hero.stats.cargo).toBeLessThanOrEqual(20);
+    expect(v.hero.built).toContain('nest');
+    expect(v.hero.built).not.toContain('hack');
+    expect(v.hero.pack).toBeLessThan(100);
   });
 
   it('rejects saves from a newer version or another park', () => {

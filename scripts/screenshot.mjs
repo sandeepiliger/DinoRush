@@ -63,7 +63,7 @@ if (scenario === 'basic') {
   await shot('basic-3-upgraded');
 }
 if (scenario === 'rich') {
-  await page.mouse.move(206, 300); await page.mouse.down(); await page.mouse.move(206, 700, { steps: 10 }); await page.mouse.up();
+  await page.evaluate(() => { window.game.wild.heroX = 0; window.game.wild.heroZ = -7; });
   await page.waitForTimeout(2000);
   await shot('rich-2-north');
   await page.locator('.wlabel').nth(4).click();
@@ -84,7 +84,7 @@ if (scenario === 'flow') {
   await page.waitForTimeout(4000);
   await shot('flow-hatched');
   await page.locator('.sheet-close').click();
-  await page.evaluate(() => window.game.cam.focus(-3.6, 8.5, 26)); // pan back to the raptors
+  await page.evaluate(() => { window.game.wild.heroX = -1; window.game.wild.heroZ = 7; }); // walk back to the raptors
   await page.waitForTimeout(2500);
   await page.locator('.wlabel').first().click();          // raptor
   await page.waitForTimeout(600);
@@ -116,7 +116,7 @@ if (scenario === 'interact') {
     g.interactions.giftTimer = 0;                                         // pterodactyl now
     g.interactions.tipTimer = 0;                                          // tip now
     for (const [d] of g.interactions.poopTimers) g.interactions.poopTimers.set(d, 0); // poops now
-    g.cam.target.set(0, 3); g.cam.distance = 28;
+    g.wild.heroX = 0; g.wild.heroZ = 5; g.cam.distance = 28;
   });
   await page.waitForTimeout(3500);
   await shot('interact-2-bubbles');
@@ -146,8 +146,53 @@ if (scenario === 'interact') {
   await page.waitForTimeout(800);
   await shot('interact-6-claimed');
 }
+if (scenario === 'wild') {
+  const tp = (x, z) => page.evaluate(([x, z]) => { const w = window.game.wild; w.heroX = x; w.heroZ = z; }, [x, z]);
+  // 1) Into the jungle.
+  await tp(0, -34);
+  await page.waitForTimeout(2500);
+  await shot('wild-1-jungle');
+  // 2) Hunt: pull the nearest prey into bite range a few times.
+  for (let i = 0; i < 6; i++) {
+    await page.evaluate(() => {
+      const w = window.game.wild; const p = w.prey.find((q) => q.state === 'wander' || q.state === 'flee');
+      if (p) { p.x = w.heroX + 1.2; p.z = w.heroZ - 0.3; }
+    });
+    await page.waitForTimeout(700);
+  }
+  await page.waitForTimeout(6000);
+  await shot('wild-2-hunt');
+  const hunt = await page.evaluate(() => ({ meat: window.game.data.hero.meat, loose: window.game.wild.loose.length, quest: window.game.data.quest }));
+  console.log('after hunting:', JSON.stringify(hunt));
+  // 3) Build the nest with a full back.
+  await page.evaluate(() => { window.game.data.hero.stats.cargo = 3; window.game.data.hero.meat = 20; });
+  await page.waitForTimeout(600);
+  await shot('wild-3-stack');
+  await tp(0, -26);
+  await page.waitForFunction(() => window.game.data.hero.built.includes('nest'), null, { timeout: 90000 });
+  await page.waitForTimeout(2500);
+  await shot('wild-4-nest-built');
+  // 4) Hatch a pack member.
+  await page.evaluate(() => { window.game.data.hero.eggReady = true; window.game.wild.refreshPads(); });
+  await tp(0, -26.2);
+  await page.waitForFunction(() => window.game.data.hero.pack >= 1, null, { timeout: 60000 });
+  await page.waitForTimeout(4000);
+  await tp(-3, -30);
+  await page.waitForTimeout(8000);
+  await shot('wild-5-pack');
+  // 5) Sell at the market.
+  await tp(6.5, 16.5);
+  await page.waitForTimeout(4000);
+  await shot('wild-6-market');
+  // 6) DNA Lab.
+  await tp(-6.5, 16.5);
+  await page.waitForTimeout(1500);
+  await shot('wild-7-lab');
+  const end = await page.evaluate(() => ({ hero: window.game.data.hero, coins: Math.round(window.game.data.park.coins), sheet: window.game.sheet }));
+  console.log('end:', JSON.stringify(end));
+}
 if (scenario === 'zoom') {
-  await page.evaluate(() => { const g = window.game; g.cam.target.set(-6, 5); g.cam.distance = 12; });
+  await page.evaluate(() => { const g = window.game; g.wild.heroX = -2.4; g.wild.heroZ = 6; g.cam.distance = 12; });
   await page.waitForTimeout(1500);
   await shot('zoom-2-raptor');
 }
