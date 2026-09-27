@@ -13,6 +13,9 @@ import { SaveManager, type SaveData } from './core/save';
 import { ECONOMY, PARKS, type EnclosureDef } from './data/parks';
 import { SPECIES } from './data/species';
 import { Economy } from './economy/economy';
+import { claimQuest, questAt, questComplete, questReward, questValue, recordQuestEvent } from './economy/quests';
+import type { QuestDef, QuestKind } from './data/quests';
+import { Interactions } from './interactions/interactions';
 import { AdManager, MockAdProvider } from './services/ads';
 import { analytics } from './services/analytics';
 import { haptics } from './services/haptics';
@@ -68,6 +71,8 @@ export class Game {
   private frameTimes: number[] = [];
   private pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
   private hiddenAt = 0;
+  private interactions!: Interactions;
+  private questEl!: HTMLElement;
 
   async start(): Promise<void> {
     const now = Date.now();
@@ -106,6 +111,21 @@ export class Game {
     this.portraits = renderPortraits(this.renderer, Object.values(SPECIES));
     this.buildHud();
     this.buildLabels();
+    this.interactions = new Interactions({
+      economy: this.economy,
+      world: this.world,
+      effects: this.effects,
+      audio: this.audio,
+      camera: this.cam.camera,
+      herds: this.herds,
+      visitors: this.sim.visitors,
+      layer: $('labels'),
+      state: () => this.data.park,
+      income: () => this.liveIncome(Date.now()),
+      reward: (amount, x, y) => this.reward(amount, x, y),
+      questEvent: (kind) => this.questEvent(kind),
+    });
+    this.buildQuestBar();
     this.onResize();
     window.addEventListener('resize', () => this.onResize());
     document.addEventListener('visibilitychange', () => this.onVisibility());
@@ -179,7 +199,8 @@ export class Game {
     const now = Date.now();
     const state = this.data.park;
 
-    this.sim.update(dt, state, now, (e) => this.onPay(e));
+    this.sim.update(dt, state, now, (e) => this.onPay(e), this.interactions.ticketMultiplier);
+    this.interactions.update(dt);
     for (const herd of this.herds.values()) for (const d of herd) d.update(dt, herd);
     this.crowd.update(this.sim.visitors);
     this.effects.update(dt);
@@ -193,6 +214,7 @@ export class Game {
       for (const l of this.labels) l.refresh();
       this.sheetRefresh?.();
       this.updateBoost(now);
+      this.refreshQuest();
     }
     this.updateCoins(dt);
 
@@ -313,7 +335,7 @@ export class Game {
 
   private updateBoost(now: number) {
     const state = this.data.park;
-    const income = this.economy.incomePerSecond(state, now);
+    const income = this.liveIncome(now);
     this.hudIncome.innerHTML = `<b>+${formatNumber(income)}</b>${t('perSec')}`;
     const active = this.economy.boostActive(state, now);
     this.boostBtn.classList.toggle('active', active);
@@ -367,7 +389,8 @@ export class Game {
           } else {
             const canUp = st.level < ECONOMY.maxLevel && coins >= this.economy.upgradeCost(def, st.level);
             const canHatch = st.dinos < def.maxDinos && coins >= this.economy.eggCost(def, st.dinos);
-            html = `${canUp || canHatch ? `<div class="wlabel-up">${icons.up}</div>` : ''}<div class="wlabel-name">${species.name} <span class="lv">${t('level', { n: st.level })}</span></div>`;
+            const chip = this.interactions?.chip(def.id, Date.now()) ?? '';
+            html = `${canUp || canHatch ? `<div class="wlabel-up">${icons.up}</div>` : ''}<div class="wlabel-name">${species.name} <span class="lv">${t('level', { n: st.level })}</span></div>${chip}`;
           }
           if (root.dataset.html !== html) {
             root.dataset.html = html;
@@ -418,6 +441,7 @@ export class Game {
   }
 
   private onWorldTap(clientX: number, clientY: number) {
+    if (this.interactions.tap(clientX, clientY)) return;
     const ndc = new THREE.Vector2((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.cam.camera);
     const targets: THREE.Object3D[] = [];
@@ -435,6 +459,7 @@ export class Game {
         if (this.raycaster.ray.intersectsSphere(sphere)) {
           d.roar();
           haptics.tap(20);
+          this.questEvent('roar');
           return;
         }
       }
@@ -464,6 +489,7 @@ export class Game {
     if (s.kind === 'enclosure') this.buildEnclosureSheet(card, s.id);
     else this.buildEntranceSheet(card);
     sheet.classList.add('open');
+    this.questEl?.classList.add('hidden');
     if (s.kind === 'enclosure') {
       const def = this.economy.enclosure(s.id);
       // Keep the enclosure visible above the sheet.
@@ -477,6 +503,7 @@ export class Game {
     this.sheet = null;
     this.sheetRefresh = null;
     $('sheet').classList.remove('open');
+    this.questEl?.classList.remove('hidden');
   }
 
   private buildEnclosureSheet(card: HTMLElement, id: string) {
@@ -745,6 +772,142 @@ export class Game {
     this.tutorial = null;
     analytics.track('tutorial_completed');
     this.persist();
+  }
+
+  // ---------------------------------------------------------------- rewards & quests
+
+  /** Income including live-only care modifiers — what the player actually earns right now. */
+  private liveIncome(now: number) {
+    return this.economy.incomePerSecond(this.data.park, now, this.interactions?.ticketMultiplier);
+  }
+
+  /** Grants coins immediately and plays the feedback: floating "+X" and coins flying to the counter. */
+  private reward(amount: number, x: number, y: number) {
+    this.economy.earn(this.data.park, amount);
+    const text = el('div', 'float-text', `+${formatNumber(amount)}`);
+    text.style.left = `${x}px`;
+    text.style.top = `${y}px`;
+    $('app').appendChild(text);
+    setTimeout(() => text.remove(), 1200);
+    const target = this.hudCoins.querySelector('.ico')!.getBoundingClientRect();
+    const tx = target.left + target.width / 2 - 13;
+    const ty = target.top + target.height / 2 - 13;
+    const count = Math.min(8, 3 + Math.floor(Math.log10(Math.max(1, amount))));
+    for (let i = 0; i < count; i++) {
+      const c = el('div', 'fly-coin', icons.coin);
+      const sx = x - 13 + (Math.random() - 0.5) * 50;
+      const sy = y - 13 + (Math.random() - 0.5) * 30;
+      c.style.transform = `translate(${sx}px, ${sy}px) scale(.4)`;
+      $('app').appendChild(c);
+      const delay = i * 45;
+      // Burst outwards, then swoop into the coin counter.
+      c.animate(
+        [
+          { transform: `translate(${sx}px, ${sy}px) scale(.4)` },
+          { transform: `translate(${sx + (Math.random() - 0.5) * 70}px, ${sy - 40 - Math.random() * 30}px) scale(1.1)`, offset: 0.3 },
+          { transform: `translate(${tx}px, ${ty}px) scale(.8)` },
+        ],
+        { duration: 750, delay, easing: 'cubic-bezier(.5,0,.75,.4)', fill: 'forwards' },
+      ).onfinish = () => {
+        c.remove();
+        if (i === count - 1) this.bumpCoins();
+        if (i % 2 === 0) this.audio.play('coin', 0.7);
+      };
+    }
+  }
+
+  private questEvent(kind: QuestKind) {
+    if (recordQuestEvent(kind, this.data.quest)) this.refreshQuest();
+  }
+
+  private buildQuestBar() {
+    this.questEl = el('button', '');
+    this.questEl.id = 'quest';
+    this.questEl.innerHTML = `<div class="q-icon">${icons.scroll}</div><div class="q-body"><div class="q-title"></div><div class="q-sub"></div><div class="q-bar"><div class="q-fill"></div></div></div><div class="q-reward">${icons.coin}<span></span></div>`;
+    this.questEl.addEventListener('click', () => this.onQuestTap());
+    $('app').appendChild(this.questEl);
+    this.refreshQuest();
+  }
+
+  private questText(q: QuestDef): string {
+    const name = (id?: string) => (id ? SPECIES[this.economy.enclosure(id).speciesId].name : '');
+    switch (q.kind) {
+      case 'level': return t('questLevel', { name: name(q.enclosure), n: q.target });
+      case 'dinos': return t('questDinos', { name: name(q.enclosure), n: q.target });
+      case 'unlock': return t('questUnlock', { name: name(q.enclosure) });
+      case 'entrance': return t('questEntrance', { n: q.target });
+      case 'feed': return t('questFeed', { n: q.target });
+      case 'clean': return t('questClean', { n: q.target });
+      case 'tip': return t('questTip', { n: q.target });
+      case 'gift': return t(q.target === 1 ? 'questGift' : 'questGifts', { n: q.target });
+      case 'roar': return t('questRoar', { n: q.target });
+    }
+  }
+
+  private refreshQuest() {
+    if (!this.questEl) return;
+    const q = questAt(this.data.quest.index);
+    const value = Math.min(q.target, questValue(q, this.data.quest, this.data.park));
+    const done = questComplete(q, this.data.quest, this.data.park);
+    const title = done ? t('questDone') : this.questText(q);
+    const sub = done ? this.questText(q) : q.kind === 'unlock' ? '' : `${value} / ${q.target}`;
+    const reward = formatNumber(questReward(q, this.liveIncome(Date.now())));
+    const key = `${this.data.quest.index}|${value}|${done}|${reward}`;
+    if (this.questEl.dataset.key === key) return;
+    this.questEl.dataset.key = key;
+    this.questEl.classList.toggle('done', done);
+    this.questEl.querySelector('.q-title')!.textContent = title;
+    this.questEl.querySelector('.q-sub')!.textContent = sub;
+    (this.questEl.querySelector('.q-fill') as HTMLElement).style.width = `${(value / q.target) * 100}%`;
+    this.questEl.querySelector('.q-reward span')!.textContent = done ? t('claim') : reward;
+  }
+
+  private onQuestTap() {
+    const q = questAt(this.data.quest.index);
+    if (questComplete(q, this.data.quest, this.data.park)) {
+      const r = this.questEl.getBoundingClientRect();
+      const amount = claimQuest(this.data.quest, this.data.park, this.liveIncome(Date.now()));
+      this.audio.play('claim');
+      haptics.tap(30);
+      this.effects.confetti(this.cam.target.x, 3, this.cam.target.y, 60, 0.9);
+      this.reward(amount, r.left + r.width - 40, r.top);
+      analytics.track('mission_completed', { index: this.data.quest.index - 1 });
+      this.refreshQuest();
+      this.persist();
+      return;
+    }
+    // Not done yet: show the player where to go.
+    this.audio.play('click');
+    switch (q.kind) {
+      case 'level':
+      case 'dinos':
+      case 'unlock':
+        this.openSheet({ kind: 'enclosure', id: q.enclosure! });
+        break;
+      case 'entrance':
+        this.openSheet({ kind: 'entrance' });
+        break;
+      case 'feed': {
+        const id = this.interactions.hungryEnclosure();
+        if (id) {
+          const d = this.economy.enclosure(id);
+          this.cam.focus(d.x * 0.6, d.z + 5, 24);
+        } else this.toast(t('hintFeed'));
+        break;
+      }
+      case 'clean':
+        this.toast(t('hintClean'));
+        break;
+      case 'tip':
+        this.toast(t('hintTip'));
+        break;
+      case 'gift':
+        this.toast(t('hintGift'));
+        break;
+      case 'roar':
+        this.toast(t('hintRoar'));
+        break;
+    }
   }
 
   // ---------------------------------------------------------------- settings / modal / toasts

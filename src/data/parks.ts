@@ -103,3 +103,58 @@ export const PARKS: ParkDef[] = [
     ],
   },
 ];
+
+/** Tuning for the hands-on interactions (feeding, cleaning, tips, gifts). Rewards are expressed as
+ * "seconds of current income" so they stay meaningful from the first minute to the late game. */
+export interface InteractionConfig {
+  /** Seconds (while playing) for a fed enclosure to become hungry. Hunger never advances offline. */
+  hungerSeconds: number;
+  /** Food level below which dinos are hungry and show a bubble. */
+  hungryBelow: number;
+  /** Ticket multiplier while hungry (mild — a nudge, not a punishment). */
+  hungryMultiplier: number;
+  /** Ticket multiplier while happy after feeding, and how long it lasts. */
+  happyMultiplier: number;
+  happySeconds: number;
+  feedRewardSeconds: number;
+  /** Each dino drops a poop every min..max seconds; an enclosure holds at most `maxPoops`. */
+  poopMinSeconds: number;
+  poopMaxSeconds: number;
+  maxPoops: number;
+  /** Ticket multiplier when an enclosure is at max poops. */
+  dirtyMultiplier: number;
+  poopRewardSeconds: number;
+  /** A visitor offers a tip every min..max seconds; the bubble lasts `tipLifetime`. */
+  tipMinSeconds: number;
+  tipMaxSeconds: number;
+  tipLifetime: number;
+  tipRewardSeconds: number;
+  /** A pterodactyl carrying a gift crosses the park every min..max seconds. */
+  giftMinSeconds: number;
+  giftMaxSeconds: number;
+  giftRewardSeconds: number;
+  /** Floor for any interaction reward, so early taps never pay 0. */
+  minReward: number;
+}
+
+export const INTERACTION: InteractionConfig = {
+  hungerSeconds: 80,
+  hungryBelow: 0.25,
+  hungryMultiplier: 0.7,
+  happyMultiplier: 2,
+  happySeconds: 25,
+  feedRewardSeconds: 4,
+  poopMinSeconds: 25,
+  poopMaxSeconds: 50,
+  maxPoops: 3,
+  dirtyMultiplier: 0.8,
+  poopRewardSeconds: 3,
+  tipMinSeconds: 7,
+  tipMaxSeconds: 14,
+  tipLifetime: 7,
+  tipRewardSeconds: 6,
+  giftMinSeconds: 70,
+  giftMaxSeconds: 130,
+  giftRewardSeconds: 45,
+  minReward: 5,
+};

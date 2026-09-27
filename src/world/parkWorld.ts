@@ -23,6 +23,8 @@ export interface EnclosureView {
   scenery: THREE.Group;
   lockedDecor: THREE.Group;
   ground: THREE.Mesh;
+  /** World position of the food trough (dinos walk here to eat). */
+  trough: THREE.Vector3;
   setUnlocked(unlocked: boolean): void;
 }
 
@@ -344,6 +346,7 @@ export class ParkWorld {
 
     const view: EnclosureView = {
       def, group, rails: railsGroup, scenery, lockedDecor, ground,
+      trough: troughMesh.position.clone().add(group.position),
       setUnlocked(unlocked: boolean) {
         railsGroup.visible = unlocked;
         scenery.visible = unlocked;

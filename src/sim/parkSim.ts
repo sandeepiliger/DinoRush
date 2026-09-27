@@ -87,7 +87,13 @@ export class ParkSim {
     return stops.sort((a, b) => a.d - b.d);
   }
 
-  update(dt: number, state: ParkState, now: number, onPay: (e: PayEvent) => void): void {
+  update(
+    dt: number,
+    state: ParkState,
+    now: number,
+    onPay: (e: PayEvent) => void,
+    ticketMultiplier?: (enclosureId: string) => number,
+  ): void {
     const eco = this.economy;
     const rate = eco.visitorRate(state.entranceLevel);
     const boost = eco.boostMultiplier(state, now);
@@ -97,7 +103,7 @@ export class ParkSim {
       state.totalVisitors += 1;
       if (!this.spawn()) {
         // Pool exhausted: a "virtual" visitor pays everything at once so income stays correct.
-        onPay({ visitor: null, amount: eco.incomePerVisitor(state) * boost, kind: 'entry' });
+        onPay({ visitor: null, amount: eco.incomePerVisitor(state, ticketMultiplier) * boost, kind: 'entry' });
       }
     }
 
@@ -120,7 +126,7 @@ export class ParkSim {
         while (v.nextStop < this.stops.length && v.d >= this.stops[v.nextStop].d) {
           const stop = this.stops[v.nextStop++];
           const def = eco.enclosure(stop.enclosureId);
-          const ticket = eco.ticketFor(def, state.enclosures[def.id]);
+          const ticket = eco.ticketFor(def, state.enclosures[def.id]) * (ticketMultiplier ? ticketMultiplier(def.id) : 1);
           if (ticket > 0) {
             v.d = stop.d;
             v.pause = PAUSE_SECONDS * (0.8 + this.rng() * 0.5);

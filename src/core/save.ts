@@ -2,6 +2,7 @@
 
 import type { ParkState } from '../economy/economy';
 import type { Economy } from '../economy/economy';
+import type { QuestProgress } from '../economy/quests';
 
 export const SAVE_VERSION = 1;
 const SAVE_KEY = 'dpt.save';
@@ -19,6 +20,7 @@ export interface SaveData {
   settings: Settings;
   removeAds: boolean;
   tutorialDone: boolean;
+  quest: QuestProgress;
 }
 
 /** Minimal storage surface so tests can run without a browser. */
@@ -61,6 +63,7 @@ export class SaveManager {
       settings: { ...DEFAULT_SETTINGS },
       removeAds: false,
       tutorialDone: false,
+      quest: { index: 0, count: 0 },
     };
   }
 
@@ -136,12 +139,17 @@ export class SaveManager {
       haptics: typeof s.haptics === 'boolean' ? s.haptics : DEFAULT_SETTINGS.haptics,
     };
 
+    // `quest` was added after v1 shipped to testers; it is optional and defaults to the start.
+    const q = (o.quest ?? {}) as Record<string, unknown>;
+    const quest = { index: int(q.index, 0, 0, 1_000_000), count: int(q.count, 0, 0, 1_000_000) };
+
     return {
       saveVersion: SAVE_VERSION,
       park,
       settings,
       removeAds: o.removeAds === true,
       tutorialDone: o.tutorialDone === true,
+      quest,
     };
   }
 }

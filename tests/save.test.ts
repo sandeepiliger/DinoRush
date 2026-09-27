@@ -15,6 +15,7 @@ describe('SaveManager', () => {
     data.park.coins = 4321;
     eco.unlock(data.park, eco.park.enclosures[1].id);
     data.settings.music = false;
+    data.quest = { index: 4, count: 1 };
     sm.save(data);
     const { data: loaded, recovered } = sm.load(2000);
     expect(recovered).toBe(false);
@@ -70,6 +71,7 @@ describe('SaveManager', () => {
     expect('bogus' in v.park.enclosures).toBe(false);
     expect(v.settings.sfx).toBe(true);
     expect(v.removeAds).toBe(false);
+    expect(v.quest).toEqual({ index: 0, count: 0 });
   });
 
   it('rejects saves from a newer version or another park', () => {

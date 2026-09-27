@@ -73,9 +73,12 @@ export class Economy {
     return Math.min(c.maxVisitorRate, c.baseVisitorRate * Math.pow(1 + c.visitorRateGrowth, level - 1));
   }
 
-  incomePerVisitor(state: ParkState): number {
+  /** `ticketMultiplier` lets live-only modifiers (dino care) apply without touching offline math. */
+  incomePerVisitor(state: ParkState, ticketMultiplier?: (enclosureId: string) => number): number {
     let total = this.entryFee(state.entranceLevel);
-    for (const def of this.park.enclosures) total += this.ticketFor(def, state.enclosures[def.id]);
+    for (const def of this.park.enclosures) {
+      total += this.ticketFor(def, state.enclosures[def.id]) * (ticketMultiplier ? ticketMultiplier(def.id) : 1);
+    }
     return total;
   }
 
@@ -88,8 +91,8 @@ export class Economy {
   }
 
   /** Steady-state income per second. The live visitor simulation converges to this value. */
-  incomePerSecond(state: ParkState, now: number): number {
-    return this.visitorRate(state.entranceLevel) * this.incomePerVisitor(state) * this.boostMultiplier(state, now);
+  incomePerSecond(state: ParkState, now: number, ticketMultiplier?: (enclosureId: string) => number): number {
+    return this.visitorRate(state.entranceLevel) * this.incomePerVisitor(state, ticketMultiplier) * this.boostMultiplier(state, now);
   }
 
   offlineEarnings(state: ParkState, now: number): { seconds: number; coins: number } {

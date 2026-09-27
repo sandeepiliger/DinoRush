@@ -24,6 +24,18 @@ offline → park keeps earning (capped) → "welcome back" reward
 A new player must understand the game within 10 seconds and make a first purchase within ~10 seconds
 (this is enforced by `tests/balance.test.ts`).
 
+## 2b. Active loop (keeps the player busy between upgrades)
+
+Every few seconds there is something to tap, and every tap pays (rewards = N seconds of current income,
+tuned in `INTERACTION` in `src/data/parks.ts`):
+- **Feeding:** enclosures get hungry while playing (never offline) → meat bubble → herd walks to the trough
+  and eats → "happy" ×2 tickets for a while. Hungry = mild ×0.7, a nudge rather than a punishment.
+- **Cleanup:** dinos drop poop; tap to clean for coins. A full enclosure is "dirty" (×0.8).
+- **Visitor tips:** a visitor shows a coin/camera/heart bubble for a few seconds; tap to collect.
+- **Pterodactyl gift:** every ~1.5–2 min a pterodactyl carries a crate across the view; catch it.
+- **Quests:** a bottom quest bar (`src/data/quests.ts`) teaches each mechanic in order, then repeats forever.
+  Tapping an unfinished quest shows the player where to go.
+
 ## 3. Architecture
 
 ```
@@ -36,6 +48,7 @@ src/
   world/       Park scenery, props, camera, effects (coins, confetti, eggs)
   audio/       Web Audio synthesiser: all SFX + background music generated at runtime
   ui/          DOM UI: styles, SVG icons, localisable strings, helpers
+  interactions/ Hands-on loop: feeding, poop cleanup, visitor tips, pterodactyl gifts (rules in economy/care.ts)
   services/    Ads, analytics, haptics — abstractions with swappable providers
   debug/       Dev-only character gallery (gallery.html, not part of the production build)
   game.ts      Orchestrator — the only file that knows about every subsystem
@@ -96,8 +109,8 @@ when `SAVE_VERSION` increases.
 
 1. ✅ **Playable park (this milestone):** one city (Mumbai), 5 species, visitors, economy, upgrades,
    hatching, entrance, offline earnings, 2× boost (mock ad), save/load, audio, tutorial hint, settings.
-2. **Juice & retention:** daily reward, missions/achievements, park rating stars, visitor thought bubbles,
-   dino feeding interaction, better unlock cinematic, haptics tuning.
+2. **Juice & retention:** ✅ feeding, cleanup, visitor tips, pterodactyl gifts, quest line.
+   Next: daily reward, park rating stars, better unlock cinematic, haptics tuning.
 3. **World map:** city map screen, second city (Dubai) with its own theme and species, prestige/city transfer.
 4. **Monetisation:** AdMob via Capacitor plugin (test IDs), Remove Ads + 2× income IAP via Play Billing,
    analytics provider (e.g. Firebase), remote config for balancing.
@@ -112,7 +125,7 @@ npm run typecheck
 npm test               # economy, balance pacing, save/load, visitor simulation
 npm run build
 npm run check:prod     # loads the production bundle headless; fails on any page error
-npm run screenshot     # then LOOK at screenshots/*.png
+npm run screenshot     # basic | rich | flow | interact — then LOOK at screenshots/*.png
 ```
 
 ## 10. Operating rules for Claude Code

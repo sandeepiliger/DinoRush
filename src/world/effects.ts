@@ -1,6 +1,7 @@
 // Pooled juice: coins popping from visitors, confetti bursts, hatching eggs. Nothing is allocated per frame.
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 interface Coin {
   active: boolean;
@@ -28,6 +29,27 @@ interface Egg {
   hatched: boolean;
 }
 
+interface Heart {
+  active: boolean;
+  t: number;
+  p: THREE.Vector3;
+  drift: number;
+}
+
+export interface Poop {
+  mesh: THREE.Mesh;
+  enclosureId: string;
+  /** >0 while being cleaned (squash-out animation). */
+  cleaning: number;
+  born: number;
+}
+
+interface Meat {
+  mesh: THREE.Mesh;
+  t: number;
+  y0: number;
+}
+
 const CONFETTI_COLORS = [0xffd23f, 0xff6b8a, 0x3fa7d6, 0x59c3a0, 0xffffff, 0xf38d68];
 
 export class Effects {
@@ -44,6 +66,14 @@ export class Effects {
   private v = new THREE.Vector3();
   private eggGeo = new THREE.SphereGeometry(0.42, 20, 16);
   private eggMats = new Map<number, THREE.MeshStandardMaterial>();
+  private hearts: Heart[] = [];
+  private heartMesh: THREE.InstancedMesh;
+  readonly poops: Poop[] = [];
+  private poopGeo: THREE.BufferGeometry;
+  private poopMat = new THREE.MeshStandardMaterial({ color: 0x7a4a26, roughness: 0.45 });
+  private meats: Meat[] = [];
+  private meatGeo: THREE.BufferGeometry;
+  private meatMat = new THREE.MeshStandardMaterial({ color: 0xd9534f, roughness: 0.5 });
 
   constructor() {
     const coinGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.05, 18);
@@ -66,6 +96,73 @@ export class Effects {
       this.particles.push({ active: false, t: 0, life: 1, p: new THREE.Vector3(), v: new THREE.Vector3(), spin: 0, size: 1 });
     }
     this.group.add(this.particleMesh);
+
+    // Heart: two spheres + a cone, merged.
+    const lobe = new THREE.SphereGeometry(0.1, 10, 8);
+    const l1 = lobe.clone().translate(-0.07, 0.05, 0);
+    const l2 = lobe.clone().translate(0.07, 0.05, 0);
+    const tip = new THREE.ConeGeometry(0.135, 0.2, 12).rotateZ(Math.PI).translate(0, -0.08, 0);
+    const heartGeo = mergeGeometries([l1.toNonIndexed(), l2.toNonIndexed(), tip.toNonIndexed()])!;
+    this.heartMesh = new THREE.InstancedMesh(heartGeo, new THREE.MeshBasicMaterial({ color: 0xff5c8a }), 60);
+    this.heartMesh.count = 0;
+    this.heartMesh.frustumCulled = false;
+    this.group.add(this.heartMesh);
+    for (let i = 0; i < 60; i++) this.hearts.push({ active: false, t: 0, p: new THREE.Vector3(), drift: 0 });
+
+    // Cartoon poop swirl: stacked tori with a curl on top.
+    const parts: THREE.BufferGeometry[] = [];
+    [[0.2, 0.07, 0.06], [0.15, 0.06, 0.16], [0.09, 0.05, 0.25]].forEach(([r, tube, y]) => {
+      parts.push(new THREE.TorusGeometry(r, tube, 8, 16).rotateX(Math.PI / 2).translate(0, y, 0).toNonIndexed());
+    });
+    parts.push(new THREE.ConeGeometry(0.06, 0.14, 8).rotateZ(-0.5).translate(0.02, 0.33, 0).toNonIndexed());
+    parts.push(new THREE.CylinderGeometry(0.18, 0.2, 0.08, 14).translate(0, 0.04, 0).toNonIndexed());
+    this.poopGeo = mergeGeometries(parts)!;
+    this.meatGeo = mergeGeometries([
+      new THREE.CapsuleGeometry(0.1, 0.18, 4, 8).rotateZ(Math.PI / 2).toNonIndexed(),
+      new THREE.CylinderGeometry(0.03, 0.03, 0.2, 6).rotateZ(Math.PI / 2).translate(0.2, 0, 0).toNonIndexed(),
+    ])!;
+  }
+
+  hearts3d(x: number, y: number, z: number, count = 6): void {
+    let n = 0;
+    for (const h of this.hearts) {
+      if (h.active) continue;
+      h.active = true;
+      h.t = -Math.random() * 0.6;
+      h.p.set(x + (Math.random() - 0.5) * 1.6, y + Math.random() * 0.4, z + (Math.random() - 0.5) * 1.2);
+      h.drift = (Math.random() - 0.5) * 0.6;
+      if (++n >= count) break;
+    }
+  }
+
+  spawnPoop(x: number, z: number, enclosureId: string): Poop {
+    const mesh = new THREE.Mesh(this.poopGeo, this.poopMat);
+    mesh.position.set(x, 0.08, z);
+    mesh.rotation.y = Math.random() * Math.PI * 2;
+    mesh.castShadow = true;
+    mesh.scale.setScalar(0.001);
+    this.group.add(mesh);
+    const p: Poop = { mesh, enclosureId, cleaning: 0, born: 0 };
+    this.poops.push(p);
+    return p;
+  }
+
+  /** Starts the clean animation; the poop is removed when it finishes. */
+  cleanPoop(p: Poop): void {
+    if (p.cleaning > 0) return;
+    p.cleaning = 0.001;
+    this.confetti(p.mesh.position.x, 0.5, p.mesh.position.z, 10, 0.4);
+  }
+
+  dropMeat(x: number, z: number): void {
+    for (let i = 0; i < 3; i++) {
+      const mesh = new THREE.Mesh(this.meatGeo, this.meatMat);
+      mesh.position.set(x + (i - 1) * 0.3, 4 + i * 0.6, z + (Math.random() - 0.5) * 0.3);
+      mesh.rotation.set(Math.random(), Math.random() * 6, Math.random());
+      mesh.castShadow = true;
+      this.group.add(mesh);
+      this.meats.push({ mesh, t: -i * 0.12, y0: mesh.position.y });
+    }
   }
 
   coinPop(x: number, y: number, z: number): void {
@@ -173,6 +270,61 @@ export class Effects {
     }
     this.particleMesh.count = n;
     this.particleMesh.instanceMatrix.needsUpdate = true;
+
+    n = 0;
+    for (const h of this.hearts) {
+      if (!h.active) continue;
+      h.t += dt;
+      if (h.t < 0) continue;
+      if (h.t > 1.6) {
+        h.active = false;
+        continue;
+      }
+      h.p.y += dt * 1.1;
+      h.p.x += Math.sin(h.t * 5) * dt * h.drift;
+      const k = h.t / 1.6;
+      this.q.identity();
+      this.s.setScalar((k < 0.15 ? k / 0.15 : 1 - Math.max(0, (k - 0.7) / 0.3)) * 1.4 + 0.001);
+      this.m.compose(h.p, this.q, this.s);
+      this.heartMesh.setMatrixAt(n++, this.m);
+    }
+    this.heartMesh.count = n;
+    this.heartMesh.instanceMatrix.needsUpdate = true;
+
+    for (let i = this.poops.length - 1; i >= 0; i--) {
+      const p = this.poops[i];
+      if (p.cleaning > 0) {
+        p.cleaning += dt;
+        const k = Math.min(1, p.cleaning / 0.25);
+        p.mesh.scale.set(1 + k * 0.6, Math.max(0.001, 1 - k), 1 + k * 0.6);
+        if (k >= 1) {
+          this.group.remove(p.mesh);
+          this.poops.splice(i, 1);
+        }
+      } else if (p.born < 1) {
+        // Plop in with a squash.
+        p.born = Math.min(1, p.born + dt * 3);
+        const e = 1 - Math.pow(2, -8 * p.born) * Math.cos(p.born * 10);
+        p.mesh.scale.set(e, Math.max(0.001, e * (1 + Math.sin(p.born * Math.PI) * 0.3)), e);
+      }
+    }
+
+    for (let i = this.meats.length - 1; i >= 0; i--) {
+      const m = this.meats[i];
+      m.t += dt;
+      if (m.t < 0) continue;
+      const fall = Math.min(1, m.t / 0.45);
+      m.mesh.position.y = Math.max(0.35, m.y0 * (1 - fall * fall));
+      m.mesh.rotation.x += dt * 6 * (1 - fall);
+      if (m.t > 3.6) {
+        // Eaten: shrink away.
+        m.mesh.scale.setScalar(Math.max(0.001, 1 - (m.t - 3.6) * 3));
+        if (m.t > 3.95) {
+          this.group.remove(m.mesh);
+          this.meats.splice(i, 1);
+        }
+      }
+    }
 
     for (let i = this.eggs.length - 1; i >= 0; i--) {
       const egg = this.eggs[i];

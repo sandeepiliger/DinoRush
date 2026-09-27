@@ -10,7 +10,7 @@ export interface Bounds {
   maxZ: number;
 }
 
-type Mode = 'hatching' | 'idle' | 'walk' | 'roar';
+type Mode = 'hatching' | 'idle' | 'walk' | 'roar' | 'eat';
 
 const TAU = Math.PI * 2;
 
@@ -31,6 +31,9 @@ export class DinoAnimator {
   private lookTarget = 0;
   /** Blend 0..1 between idle pose and walk pose, smoothed to avoid pops. */
   private walkBlend = 0;
+  /** Walking towards food: on arrival switch to the eating pose instead of idling. */
+  private goingToEat = false;
+  private eatT = 0;
 
   constructor(
     readonly rig: DinoRig,
@@ -57,6 +60,16 @@ export class DinoAnimator {
     this.mode = 'roar';
     this.roarT = 0;
     this.onRoar(this);
+  }
+
+  /** Walk to the trough and munch. */
+  goEat(x: number, z: number): void {
+    if (this.mode === 'hatching') return;
+    const b = this.bounds;
+    this.targetX = THREE.MathUtils.clamp(x, b.minX, b.maxX);
+    this.targetZ = THREE.MathUtils.clamp(z, b.minZ, b.maxZ);
+    this.goingToEat = true;
+    this.mode = 'walk';
   }
 
   get isHatching(): boolean {
@@ -104,9 +117,25 @@ export class DinoAnimator {
         // Slow down for sharp turns and on arrival so the feet never skate.
         const want = sp.walkSpeed * (Math.abs(turn) > 1.2 ? 0.35 : 1) * Math.min(1, dist / 1.2);
         this.speedNow += (want - this.speedNow) * Math.min(1, dt * 3);
-        if (dist < 0.25) {
+        // Herd members crowd the trough, so "close enough" is generous when eating.
+        if (dist < (this.goingToEat ? 1.1 : 0.25)) {
+          if (this.goingToEat) {
+            this.goingToEat = false;
+            this.mode = 'eat';
+            this.eatT = 0;
+          } else {
+            this.mode = 'idle';
+            this.timer = 1.5 + this.rng() * 3.5;
+          }
+        }
+        break;
+      }
+      case 'eat': {
+        this.eatT += dt;
+        this.speedNow = Math.max(0, this.speedNow - dt * 4);
+        if (this.eatT > 3.6) {
           this.mode = 'idle';
-          this.timer = 1.5 + this.rng() * 3.5;
+          this.timer = 0.5 + this.rng();
         }
         break;
       }
@@ -198,15 +227,20 @@ export class DinoAnimator {
     // Neck and head: idle look-around, walk bob, roar pose.
     this.lookYaw += (this.lookTarget - this.lookYaw) * Math.min(1, dt * 2.5 || 1);
     const roarK = this.mode === 'roar' ? roarCurve(this.roarT) : 0;
+    // Eating: head dips to the ground and bobs, jaw chomps.
+    const eatK = this.mode === 'eat' ? Math.min(1, this.eatT * 3, (3.6 - this.eatT) * 3) : 0;
+    const chomp = eatK * Math.max(0, Math.sin(this.eatT * 11));
     const neckCount = rig.bones.length - 1 - rig.hipBone;
     for (let i = rig.hipBone + 1, k = 0; i < rig.bones.length; i++, k++) {
       const bone = rig.bones[i];
       bone.rotation.y = (this.lookYaw / neckCount) * 0.8;
-      bone.rotation.z = Math.sin(t * 1.7 + k * 0.4) * 0.025 + Math.cos(this.phase * 2) * 0.03 * wb + roarK * 0.12;
+      bone.rotation.z =
+        Math.sin(t * 1.7 + k * 0.4) * 0.025 + Math.cos(this.phase * 2) * 0.03 * wb + roarK * 0.12 -
+        eatK * (0.3 + Math.sin(this.eatT * 5.5) * 0.06);
     }
     rig.headPivot.rotation.y = this.lookYaw * 0.3;
-    rig.jaw.rotation.z = -roarK * 0.65 - (Math.sin(t * 0.9) > 0.97 ? 0.08 : 0);
-    rig.body.rotation.z += roarK * 0.1;
+    rig.jaw.rotation.z = -roarK * 0.65 - chomp * 0.3 - (Math.sin(t * 0.9) > 0.97 ? 0.08 : 0);
+    rig.body.rotation.z += roarK * 0.1 - eatK * 0.08;
 
     for (let i = 0; i < rig.arms.length; i++) {
       rig.arms[i].rotation.z = -0.6 + Math.sin(this.phase + i * Math.PI) * 0.25 * wb + roarK * 0.4;

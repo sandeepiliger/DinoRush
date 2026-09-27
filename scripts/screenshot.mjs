@@ -27,6 +27,17 @@ if (scenario === 'rich') {
     }));
   });
 }
+if (scenario === 'interact') {
+  await page.addInitScript(() => {
+    const now = Date.now();
+    localStorage.setItem('dpt.save', JSON.stringify({
+      saveVersion: 1, removeAds: false, tutorialDone: true, settings: { sfx: false, music: false, haptics: false },
+      quest: { index: 3, count: 0 },
+      park: { parkId: 'mumbai', coins: 900, entranceLevel: 4, boostUntil: 0, lastSeen: now, totalEarned: 0, totalVisitors: 0,
+        enclosures: { 'raptor-pen': { level: 12, dinos: 3 }, 'trike-field': { level: 4, dinos: 2 } } },
+    }));
+  });
+}
 if (scenario === 'flow') {
   await page.addInitScript(() => {
     if (sessionStorage.getItem('seeded')) return;
@@ -97,6 +108,43 @@ if (scenario === 'flow') {
   await page.waitForFunction(() => document.getElementById('loading')?.classList.contains('done'), null, { timeout: 60000 });
   const reloaded = await page.evaluate(() => ({ trike: window.game.data.park.enclosures['trike-field'], raptor: window.game.data.park.enclosures['raptor-pen'], music: window.game.data.settings.music }));
   console.log('persisted:', JSON.stringify(reloaded), 'boostUntil>now:', saved.park.boostUntil > Date.now());
+}
+if (scenario === 'interact') {
+  await page.evaluate(() => {
+    const g = window.game;
+    for (const c of g.interactions.care.values()) c.food = 0.1;          // everyone hungry
+    g.interactions.giftTimer = 0;                                         // pterodactyl now
+    g.interactions.tipTimer = 0;                                          // tip now
+    for (const [d] of g.interactions.poopTimers) g.interactions.poopTimers.set(d, 0); // poops now
+    g.cam.target.set(0, 3); g.cam.distance = 28;
+  });
+  await page.waitForTimeout(3500);
+  await shot('interact-2-bubbles');
+  const before = await page.evaluate(() => window.game.data.park.coins);
+  await page.locator('.bubble-feed').first().click({ force: true });
+  await page.waitForTimeout(400);
+  await shot('interact-3-feeding');
+  if (await page.locator('.bubble-tip').count()) await page.locator('.bubble-tip').click({ force: true });
+  const poop = await page.evaluate(() => {
+    const g = window.game; const p = g.effects.poops.find((x) => x.cleaning === 0);
+    if (!p) return null;
+    const v = p.mesh.position.clone().setY(0.25).project(g.cam.camera);
+    return { x: (v.x * 0.5 + 0.5) * innerWidth, y: (-v.y * 0.5 + 0.5) * innerHeight };
+  });
+  if (poop) { await page.mouse.click(poop.x, poop.y); }
+  await page.waitForTimeout(600);
+  await page.waitForSelector('.bubble-gift:not([hidden])', { timeout: 90000 });
+  await shot('interact-4-pterodactyl');
+  await page.locator('.bubble-gift').click({ force: true });
+  await page.waitForTimeout(500);
+  await shot('interact-4b-rewards');
+  await page.waitForTimeout(4000);
+  await shot('interact-5-eating');
+  const after = await page.evaluate(() => ({ coins: window.game.data.park.coins, quest: window.game.data.quest, poops: window.game.effects.poops.length }));
+  console.log('coins', Math.round(before), '->', Math.round(after.coins), 'quest', JSON.stringify(after.quest), 'poops left', after.poops, 'poop tapped', !!poop);
+  await page.locator('#quest').click({ force: true });
+  await page.waitForTimeout(800);
+  await shot('interact-6-claimed');
 }
 if (scenario === 'zoom') {
   await page.evaluate(() => { const g = window.game; g.cam.target.set(-6, 5); g.cam.distance = 12; });

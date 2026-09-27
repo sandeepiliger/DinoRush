@@ -1,7 +1,9 @@
 // Every sound in the game is synthesised at runtime with the Web Audio API — no audio files to license,
 // download or compress. Sounds are short and layered so they feel "juicy" rather than beepy.
 
-type Voice = 'coin' | 'upgrade' | 'unlock' | 'hatch' | 'roar' | 'click' | 'error' | 'reward' | 'milestone';
+type Voice =
+  | 'coin' | 'upgrade' | 'unlock' | 'hatch' | 'roar' | 'click' | 'error' | 'reward' | 'milestone'
+  | 'munch' | 'squish' | 'tip' | 'squawk' | 'claim' | 'whoosh';
 
 export class AudioManager {
   private ctx: AudioContext | null = null;
@@ -114,6 +116,36 @@ export class AudioManager {
       case 'roar':
         this.roar(t, intensity);
         break;
+      case 'munch':
+        // Three crunchy chomps.
+        for (let i = 0; i < 3; i++) {
+          this.noiseBurst(t + i * 0.16, 0.07, 1400, 0.3, 'bandpass');
+          this.tone('square', 110, t + i * 0.16, 0.06, 0.05, 70);
+        }
+        break;
+      case 'squish':
+        this.noiseBurst(t, 0.12, 500, 0.35, 'lowpass');
+        this.tone('sine', 300, t, 0.14, 0.12, 90);
+        this.tone('sine', 1400, t + 0.12, 0.09, 0.05, 2200);
+        break;
+      case 'tip':
+        this.tone('sine', 1568, t, 0.08, 0.1);
+        this.tone('sine', 2093, t + 0.07, 0.18, 0.1);
+        this.sparkle(t + 0.05, 0.25);
+        break;
+      case 'squawk':
+        this.tone('sawtooth', 900, t, 0.12, 0.06, 1500);
+        this.tone('sawtooth', 1300, t + 0.12, 0.18, 0.05, 700);
+        break;
+      case 'whoosh':
+        this.noiseBurst(t, 0.4, 700, 0.25, 'bandpass');
+        break;
+      case 'claim': {
+        [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => this.tone('triangle', f, t + i * 0.06, 0.25, 0.1));
+        this.thump(t, 0.4);
+        this.sparkle(t + 0.2, 0.7);
+        break;
+      }
     }
   }
 
